@@ -20,6 +20,8 @@ type Listing = {
 
 type OfferStatus = 'Pending' | 'Accepted' | 'Rejected'
 
+export type QualityGrade = 'A' | 'B' | 'C'
+
 export type Offer = {
   id: string
   buyer: string
@@ -31,6 +33,9 @@ export type Offer = {
   status: OfferStatus
   // set when the farmer has sent a counter-price back to the buyer
   counterPrice?: number
+  // set by the buyer on the dedicated grading screen, after accept
+  grade?: QualityGrade
+  finalPrice?: number
 }
 
 const listings: Listing[] = [
@@ -666,6 +671,137 @@ function NegotiateModal({
 }
 
 /* -------------------------------------------------------------------------- */
+/* Grading screen (buyer grades quality + sets final price, post-accept)     */
+/* -------------------------------------------------------------------------- */
+
+export function GradingScreen({
+  offer,
+  back,
+  submit,
+}: {
+  offer: Offer
+  back: () => void
+  submit: (grade: QualityGrade, finalPrice: number) => void
+}) {
+  const { t } = useLanguage()
+  const [grade, setGrade] = useState<QualityGrade>('A')
+  const [finalPrice, setFinalPrice] = useState(offer.price)
+  const [error, setError] = useState('')
+
+  const gradeLabels: Record<QualityGrade, { label: string; note: string }> = {
+    A: { label: t.gradeALabel, note: t.gradeANote },
+    B: { label: t.gradeBLabel, note: t.gradeBNote },
+    C: { label: t.gradeCLabel, note: t.gradeCNote },
+  }
+
+  const onSubmit = () => {
+    if (finalPrice <= 0) {
+      return setError('Final price must be greater than 0.')
+    }
+
+    submit(grade, finalPrice)
+  }
+
+  return (
+    <div className="space-y-7">
+      <div className="flex items-center gap-3">
+        <button
+          onClick={back}
+          className="rounded-xl border border-border p-2"
+          aria-label="Back"
+        >
+          <X className="size-5" />
+        </button>
+
+        <div>
+          <p className="text-sm font-semibold text-primary">
+            {t.gradingTag}
+          </p>
+
+          <h1 className="font-serif text-3xl font-bold">
+            {t.gradeThisProduce}
+          </h1>
+        </div>
+      </div>
+
+      <section className="rounded-2xl border border-border bg-card p-5">
+        <div className="grid grid-cols-2 gap-4 text-sm sm:grid-cols-4">
+          <Info label="Buyer" value={offer.buyer} />
+          <Info label="Crop" value={offer.crop} />
+          <Info
+            label="Quantity"
+            value={`${offer.quantity} quintals`}
+          />
+          <Info
+            label="Accepted price"
+            value={`${money(offer.price)}/q`}
+          />
+        </div>
+      </section>
+
+      <section>
+        <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
+          {t.assignGrade}
+        </p>
+
+        <div className="mt-3 grid gap-4 md:grid-cols-3">
+          {(Object.keys(gradeLabels) as QualityGrade[]).map((key) => {
+            const isSelected = grade === key
+
+            return (
+              <button
+                key={key}
+                onClick={() => setGrade(key)}
+                className={`rounded-2xl border p-5 text-left transition ${isSelected
+                  ? 'border-primary bg-primary/10 ring-2 ring-primary/20'
+                  : 'border-border bg-card hover:border-primary/40'
+                  }`}
+              >
+                <h3 className="font-bold">{gradeLabels[key].label}</h3>
+
+                <p className="mt-2 text-sm text-muted-foreground">
+                  {gradeLabels[key].note}
+                </p>
+              </button>
+            )
+          })}
+        </div>
+      </section>
+
+      <section className="rounded-2xl border border-border bg-card p-5">
+        <label className="block text-sm font-semibold">
+          {t.finalPriceLabel}
+          <input
+            className="mt-2 h-12 w-full rounded-xl border border-input bg-background px-3"
+            type="number"
+            min="1"
+            value={finalPrice}
+            onChange={(e) => setFinalPrice(Number(e.target.value))}
+          />
+        </label>
+
+        <p className="mt-2 text-sm text-muted-foreground">
+          {t.totalAtPricePrefix} {money(finalPrice * offer.quantity)}
+        </p>
+
+        {error && (
+          <p className="mt-3 rounded-xl bg-red-50 p-3 text-sm font-semibold text-red-700">
+            {error}
+          </p>
+        )}
+
+        <button
+          onClick={onSubmit}
+          className="mt-5 min-h-12 w-full rounded-xl bg-primary px-5 font-bold text-primary-foreground"
+        >
+          {t.finalizeGradingBtn}
+        </button>
+      </section>
+    </div>
+  )
+}
+
+/* -------------------------------------------------------------------------- */
 /* Offer card                                                                */
 /* -------------------------------------------------------------------------- */
 
@@ -675,13 +811,22 @@ function OfferCard({
   reject,
   openNegotiate,
   goToLogistics,
+  goToGrading,
 }: {
   offer: Offer
   accept: () => void
   reject: () => void
   openNegotiate: () => void
   goToLogistics: () => void
+  goToGrading: () => void
 }) {
+  const { t } = useLanguage()
+
+  const gradeLabels: Record<QualityGrade, string> = {
+    A: t.gradeALabel,
+    B: t.gradeBLabel,
+    C: t.gradeCLabel,
+  }
   const tone =
     offer.status === 'Accepted'
       ? 'green'
@@ -743,22 +888,46 @@ function OfferCard({
         </div>
       )}
 
-      {offer.status === 'Accepted' && (
+      {offer.status === 'Accepted' && !offer.grade && (
         <div className="mt-4 space-y-3 rounded-xl bg-emerald-50 p-4 text-sm text-emerald-900">
           <div>
-            <p className="font-bold">Offer Accepted</p>
+            <p className="font-bold">{t.offerAcceptedTitle}</p>
 
             <p className="mt-1">
-              Buyer connection established in prototype. Next step:
-              arrange transport for the accepted quantity.
+              {t.offerAcceptedGradeNote}
             </p>
           </div>
+
+          <button
+            onClick={goToGrading}
+            className="min-h-11 w-full rounded-xl bg-primary px-4 text-sm font-bold text-primary-foreground"
+          >
+            {t.gradeSetPriceBtn}
+          </button>
+        </div>
+      )}
+
+      {offer.status === 'Accepted' && offer.grade && (
+        <div className="mt-4 space-y-3 rounded-xl bg-emerald-50 p-4 text-sm text-emerald-900">
+          <div className="flex items-center justify-between">
+            <p className="font-bold">
+              {gradeLabels[offer.grade]}
+            </p>
+
+            <p className="font-bold">
+              {money(offer.finalPrice ?? offer.price)}/q
+            </p>
+          </div>
+
+          <p>
+            {t.gradedByBuyerNote}
+          </p>
 
           <button
             onClick={goToLogistics}
             className="min-h-11 w-full rounded-xl bg-primary px-4 text-sm font-bold text-primary-foreground"
           >
-            Plan Transport for This Offer
+            {t.planTransportBtn}
           </button>
         </div>
       )}
@@ -807,6 +976,7 @@ export function FarmerOffers({
   openMarketplace,
   context,
   goToLogistics,
+  goToGrading,
 }: {
   offers: Offer[]
   setOffers: React.Dispatch<React.SetStateAction<Offer[]>>
@@ -820,6 +990,7 @@ export function FarmerOffers({
     netReturn: number
   }
   goToLogistics: () => void
+  goToGrading: (offerId: string) => void
 }) {
   const { t } = useLanguage()
 
@@ -919,6 +1090,7 @@ export function FarmerOffers({
             reject={() => update(offer.id, 'Rejected')}
             openNegotiate={() => setNegotiatingId(offer.id)}
             goToLogistics={goToLogistics}
+            goToGrading={() => goToGrading(offer.id)}
           />
         ))}
       </div>

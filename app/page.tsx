@@ -49,8 +49,10 @@ import { useLanguage, type Labels, type Language } from '@/lib/language'
 import {
   BuyerMarketplace,
   FarmerOffers,
+  GradingScreen,
   type MarketplaceView,
   type Offer,
+  type QualityGrade,
 } from '@/components/marketplace'
 
 import { Logistics } from '@/components/logistics'
@@ -77,6 +79,7 @@ type View =
   | 'trends'
   | 'forecast'
   | 'logistics'
+  | 'grading'
   | MarketplaceView
 
 const money = (value: number) =>
@@ -183,9 +186,9 @@ function Sidebar({
     [t.dashboard, 'dashboard', Home],
     [t.markets, 'comparison', BarChart3],
     [t.recommendation, 'recommendation', TrendingUp],
-    ['Logistics', 'logistics', Truck],
+    [t.logisticsTag, 'logistics', Truck],
     [t.trends, 'trends', TrendingUp],
-    ['Buyer Marketplace', 'marketplace', Users],
+    [t.buyerMarketplaceTag, 'marketplace', Users],
     [t.offers, 'offers', Package],
   ]
 
@@ -2072,7 +2075,7 @@ function MobileNav({
   > = [
       [t.dashboard, 'dashboard', Home],
       [t.markets, 'comparison', BarChart3],
-      ['Logistics', 'logistics', Truck],
+      [t.logisticsTag, 'logistics', Truck],
       [t.offers, 'offers', Package],
       [t.trends, 'trends', TrendingUp],
     ]
@@ -2138,6 +2141,9 @@ export default function Page() {
   const [transportCost, setTransportCost] =
     useState<number | null>(null)
 
+  const [gradingOfferId, setGradingOfferId] =
+    useState<string | null>(null)
+
   const { language, setLanguage, t } = useLanguage()
 
   const quantityInQuintals =
@@ -2176,6 +2182,33 @@ export default function Page() {
     setLanguage('English')
     setOffline(false)
     setTransportCost(null)
+    setGradingOfferId(null)
+  }
+
+  const goToGrading = (offerId: string) => {
+    setGradingOfferId(offerId)
+    setView('grading')
+  }
+
+  const gradingOffer = offers.find(
+    (offer) => offer.id === gradingOfferId,
+  )
+
+  const submitGrading = (grade: QualityGrade, finalPrice: number) => {
+    if (!gradingOfferId) {
+      return
+    }
+
+    setOffers((current) =>
+      current.map((offer) =>
+        offer.id === gradingOfferId
+          ? { ...offer, grade, finalPrice }
+          : offer,
+      ),
+    )
+
+    setGradingOfferId(null)
+    setView('offers')
   }
 
   const compare = () => {
@@ -2264,16 +2297,13 @@ export default function Page() {
 
             <nav className="mt-10 space-y-2">
               {[
-                ['Dashboard', 'dashboard'],
-                ['Markets', 'comparison'],
-                ['Recommendation', 'recommendation'],
-                ['Logistics', 'logistics'],
-                ['Price Trends', 'trends'],
-                [
-                  'Buyer Marketplace',
-                  'marketplace',
-                ],
-                ['My Offers', 'offers'],
+                [t.dashboard, 'dashboard'],
+                [t.markets, 'comparison'],
+                [t.recommendation, 'recommendation'],
+                [t.logisticsTag, 'logistics'],
+                [t.trends, 'trends'],
+                [t.buyerMarketplaceTag, 'marketplace'],
+                [t.myOffers, 'offers'],
               ].map(([label, target]) => (
                 <button
                   type="button"
@@ -2456,8 +2486,22 @@ export default function Page() {
               goToLogistics={() =>
                 setView('logistics')
               }
+              goToGrading={goToGrading}
             />
           )}
+
+          {view === 'grading' &&
+            (gradingOffer ? (
+              <GradingScreen
+                offer={gradingOffer}
+                back={() => setView('offers')}
+                submit={submitGrading}
+              />
+            ) : (
+              <EmptyState
+                back={() => setView('offers')}
+              />
+            ))}
 
           {view === 'dashboard' && <EvaluatorSections />}
         </main>
