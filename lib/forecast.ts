@@ -1,3 +1,5 @@
+import { markets } from './markets'
+
 export type ForecastDecision =
   | 'WAIT'
   | 'SELL NOW'
@@ -144,274 +146,103 @@ export function getPotentialRevenue(
 
 export const historicalSeries = {
   Onion: {
-    '7 Days': [
-      2480,
-      2520,
-      2490,
-      2570,
-      2540,
-      2620,
-      2650,
-    ],
-    '30 Days': [
-      2320,
-      2400,
-      2380,
-      2460,
-      2490,
-      2550,
-      2570,
-      2650,
-    ],
-    '6 Months': [
-      2100,
-      2240,
-      2360,
-      2290,
-      2470,
-      2520,
-      2580,
-      2650,
-    ],
+    '7 Days': [2480, 2520, 2490, 2570, 2540, 2620, 2650],
+    '30 Days': [2320, 2400, 2380, 2460, 2490, 2550, 2570, 2650],
+    '6 Months': [2100, 2240, 2360, 2290, 2470, 2520, 2580, 2650],
   },
 
   Tomato: {
-    '7 Days': [
-      2050,
-      2110,
-      2080,
-      2150,
-      2130,
-      2160,
-      2180,
-    ],
-    '30 Days': [
-      1980,
-      2020,
-      2050,
-      2100,
-      2120,
-      2150,
-      2160,
-      2180,
-    ],
-    '6 Months': [
-      1850,
-      1920,
-      1990,
-      2050,
-      2100,
-      2140,
-      2160,
-      2180,
-    ],
+    '7 Days': [2050, 2110, 2080, 2150, 2130, 2160, 2180],
+    '30 Days': [1980, 2020, 2050, 2100, 2120, 2150, 2160, 2180],
+    '6 Months': [1850, 1920, 1990, 2050, 2100, 2140, 2160, 2180],
   },
 
   Wheat: {
-    '7 Days': [
-      2480,
-      2460,
-      2440,
-      2450,
-      2430,
-      2425,
-      2420,
-    ],
-    '30 Days': [
-      2520,
-      2500,
-      2480,
-      2460,
-      2450,
-      2440,
-      2430,
-      2420,
-    ],
-    '6 Months': [
-      2600,
-      2550,
-      2520,
-      2490,
-      2470,
-      2450,
-      2430,
-      2420,
-    ],
+    '7 Days': [2480, 2460, 2440, 2450, 2430, 2425, 2420],
+    '30 Days': [2520, 2500, 2480, 2460, 2450, 2440, 2430, 2420],
+    '6 Months': [2600, 2550, 2520, 2490, 2470, 2450, 2430, 2420],
   },
 
   Soybean: {
-    '7 Days': [
-      4550,
-      4580,
-      4610,
-      4630,
-      4650,
-      4670,
-      4680,
-    ],
-    '30 Days': [
-      4420,
-      4480,
-      4520,
-      4570,
-      4610,
-      4640,
-      4660,
-      4680,
-    ],
-    '6 Months': [
-      4200,
-      4300,
-      4380,
-      4460,
-      4540,
-      4600,
-      4650,
-      4680,
-    ],
+    '7 Days': [4550, 4580, 4610, 4630, 4650, 4670, 4680],
+    '30 Days': [4420, 4480, 4520, 4570, 4610, 4640, 4660, 4680],
+    '6 Months': [4200, 4300, 4380, 4460, 4540, 4600, 4650, 4680],
   },
 
   Cotton: {
-    '7 Days': [
-      7140,
-      7160,
-      7180,
-      7190,
-      7210,
-      7200,
-      7200,
-    ],
-    '30 Days': [
-      7050,
-      7080,
-      7120,
-      7150,
-      7170,
-      7190,
-      7200,
-      7200,
-    ],
-    '6 Months': [
-      6900,
-      6980,
-      7040,
-      7100,
-      7140,
-      7170,
-      7190,
-      7200,
-    ],
+    '7 Days': [7140, 7160, 7180, 7190, 7210, 7200, 7200],
+    '30 Days': [7050, 7080, 7120, 7150, 7170, 7190, 7200, 7200],
+    '6 Months': [6900, 6980, 7040, 7100, 7140, 7170, 7190, 7200],
   },
 
   Potato: {
-    '7 Days': [
-      1880,
-      1900,
-      1920,
-      1930,
-      1940,
-      1950,
-      1950,
-    ],
-    '30 Days': [
-      1800,
-      1840,
-      1870,
-      1900,
-      1920,
-      1930,
-      1940,
-      1950,
-    ],
-    '6 Months': [
-      1700,
-      1760,
-      1810,
-      1860,
-      1900,
-      1930,
-      1940,
-      1950,
-    ],
+    '7 Days': [1880, 1900, 1920, 1930, 1940, 1950, 1950],
+    '30 Days': [1800, 1840, 1870, 1900, 1920, 1930, 1940, 1950],
+    '6 Months': [1700, 1760, 1810, 1860, 1900, 1930, 1940, 1950],
   },
 
   Maize: {
-    '7 Days': [
-      2310,
-      2300,
-      2290,
-      2280,
-      2270,
-      2260,
-      2260,
-    ],
-    '30 Days': [
-      2380,
-      2360,
-      2340,
-      2320,
-      2300,
-      2280,
-      2270,
-      2260,
-    ],
-    '6 Months': [
-      2500,
-      2460,
-      2420,
-      2380,
-      2340,
-      2300,
-      2280,
-      2260,
-    ],
+    '7 Days': [2310, 2300, 2290, 2280, 2270, 2260, 2260],
+    '30 Days': [2380, 2360, 2340, 2320, 2300, 2280, 2270, 2260],
+    '6 Months': [2500, 2460, 2420, 2380, 2340, 2300, 2280, 2260],
   },
 
   Gram: {
-    '7 Days': [
-      5750,
-      5780,
-      5800,
-      5820,
-      5840,
-      5850,
-      5850,
-    ],
-    '30 Days': [
-      5600,
-      5650,
-      5700,
-      5750,
-      5780,
-      5810,
-      5830,
-      5850,
-    ],
-    '6 Months': [
-      5300,
-      5400,
-      5500,
-      5600,
-      5700,
-      5780,
-      5820,
-      5850,
-    ],
+    '7 Days': [5750, 5780, 5800, 5820, 5840, 5850, 5850],
+    '30 Days': [5600, 5650, 5700, 5750, 5780, 5810, 5830, 5850],
+    '6 Months': [5300, 5400, 5500, 5600, 5700, 5780, 5820, 5850],
   },
 } as const
 
-type CropName =
-  keyof typeof historicalSeries
+type CropName = keyof typeof historicalSeries
+type TrendRange = keyof typeof historicalSeries.Onion
 
-type TrendRange =
-  keyof typeof historicalSeries.Onion
+/**
+ * Location-adjusted anchor price: average of real market prices
+ * (from markets.ts) for this crop at this locationId. Real data,
+ * not a hardcoded per-location table.
+ */
+function getLocationAnchorPrice(
+  cropName: CropName,
+  locationId: string,
+): number | null {
+  const matches = markets.filter(
+    (m) => m.locationId === locationId && m.prices[cropName] != null,
+  )
+
+  if (matches.length === 0) {
+    return null
+  }
+
+  const sum = matches.reduce(
+    (acc, m) => acc + m.prices[cropName],
+    0,
+  )
+
+  return sum / matches.length
+}
 
 export function getTrendStats(
   cropName: CropName,
   range: TrendRange,
+  locationId?: string,
 ) {
-  const values =
-    historicalSeries[cropName][range]
+  const baseValues = historicalSeries[cropName][range]
+
+  // Scale the whole series so it lands on the real local market
+  // price instead of the national base price — same shape, shifted
+  // to match this location's actual current rate.
+  const anchor = locationId
+    ? getLocationAnchorPrice(cropName, locationId)
+    : null
+
+  const lastBase = baseValues.at(-1) ?? 0
+  const scale =
+    anchor && lastBase > 0 ? anchor / lastBase : 1
+
+  const values = baseValues.map((v) =>
+    Math.round(v * scale),
+  )
 
   const first = values[0] ?? 0
   const current = values.at(-1) ?? 0
@@ -425,20 +256,13 @@ export function getTrendStats(
 
   return {
     current,
-
     average: Math.round(
-      values.reduce(
-        (sum, value) => sum + value,
-        0,
-      ) / values.length,
+      values.reduce((sum, value) => sum + value, 0) /
+        values.length,
     ),
-
     highest: Math.max(...values),
-
     lowest: Math.min(...values),
-
     trend,
-
     values,
   }
 }
