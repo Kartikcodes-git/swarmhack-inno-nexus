@@ -26,6 +26,12 @@ import {
   type ForecastDecision,
 } from '@/lib/forecast'
 
+import {
+  getMultidayForecast,
+  getBestSellDay,
+  getSpoilagePercent,
+} from '@/lib/spoilage'
+
 import type { Market } from '@/lib/markets'
 import { getMarketsForLocation } from '@/lib/markets'
 import {
@@ -193,11 +199,10 @@ function Sidebar({
             key={target}
             type="button"
             onClick={() => navigate(target)}
-            className={`flex w-full items-center gap-3 rounded-xl px-4 py-3 text-left text-sm font-semibold transition-colors ${
-              view === target
-                ? 'bg-primary/10 text-primary'
-                : 'text-muted-foreground hover:bg-muted hover:text-foreground'
-            }`}
+            className={`flex w-full items-center gap-3 rounded-xl px-4 py-3 text-left text-sm font-semibold transition-colors ${view === target
+              ? 'bg-primary/10 text-primary'
+              : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+              }`}
           >
             <Icon className="size-[18px]" />
             {label}
@@ -231,6 +236,8 @@ function Header({
   setOffline,
   locationLabel,
   t,
+  role,
+  switchRole,
 }: {
   onDemo: () => void
   onMenu: () => void
@@ -240,6 +247,8 @@ function Header({
   setOffline: (value: boolean) => void
   locationLabel: string
   t: Labels
+  role: 'farmer' | 'buyer'
+  switchRole: () => void
 }) {
   return (
     <header className="flex min-h-[76px] items-center justify-between gap-3 border-b border-border bg-background/95 px-4 py-4 backdrop-blur md:px-8">
@@ -262,14 +271,12 @@ function Header({
         <button
           type="button"
           onClick={() => setOffline(!offline)}
-          className={`flex items-center gap-1.5 font-semibold ${
-            offline ? 'text-red-700' : 'text-emerald-700'
-          }`}
+          className={`flex items-center gap-1.5 font-semibold ${offline ? 'text-red-700' : 'text-emerald-700'
+            }`}
         >
           <span
-            className={`size-2 rounded-full ${
-              offline ? 'bg-red-500' : 'bg-emerald-500'
-            }`}
+            className={`size-2 rounded-full ${offline ? 'bg-red-500' : 'bg-emerald-500'
+              }`}
           />
 
           {offline ? t.offline : 'Online'}
@@ -277,6 +284,14 @@ function Header({
       </div>
 
       <div className="flex items-center gap-2">
+        <button
+          type="button"
+          onClick={switchRole}
+          className="hidden rounded-lg border border-border px-3 py-1.5 text-xs font-bold text-muted-foreground sm:block"
+        >
+          {role === 'farmer' ? '🌾 Farmer' : '🛒 Buyer'} · Switch
+        </button>
+
         <div className="hidden rounded-lg border border-border bg-card p-1 sm:flex">
           {(['English', 'मराठी', 'हिंदी'] as Language[]).map(
             (item) => (
@@ -284,11 +299,10 @@ function Header({
                 type="button"
                 key={item}
                 onClick={() => setLanguage(item)}
-                className={`rounded-md px-2 py-1 text-[11px] font-bold ${
-                  language === item
-                    ? 'bg-primary text-primary-foreground'
-                    : 'text-muted-foreground'
-                }`}
+                className={`rounded-md px-2 py-1 text-[11px] font-bold ${language === item
+                  ? 'bg-primary text-primary-foreground'
+                  : 'text-muted-foreground'
+                  }`}
               >
                 {item}
               </button>
@@ -296,13 +310,7 @@ function Header({
           )}
         </div>
 
-        <button
-          type="button"
-          onClick={onDemo}
-          className="min-h-11 rounded-full bg-accent px-4 py-2 text-xs font-bold text-accent-foreground shadow-sm"
-        >
-          Start SIH Demo
-        </button>
+
       </div>
     </header>
   )
@@ -348,15 +356,95 @@ function DemoSteps({ view }: { view: View }) {
       {steps.map((step, index) => (
         <span
           key={step}
-          className={`rounded-full px-3 py-1.5 ${
-            index + 1 <= current
-              ? 'bg-primary text-primary-foreground'
-              : 'bg-muted'
-          }`}
+          className={`rounded-full px-3 py-1.5 ${index + 1 <= current
+            ? 'bg-primary text-primary-foreground'
+            : 'bg-muted'
+            }`}
         >
           {index + 1}. {step}
         </span>
       ))}
+    </div>
+  )
+}
+
+/* -------------------------------------------------------------------------- */
+/* Role select                                                                */
+/* -------------------------------------------------------------------------- */
+
+function RoleSelect({
+  selectRole,
+}: {
+  selectRole: (role: 'farmer' | 'buyer') => void
+}) {
+  return (
+    <div className="flex min-h-screen items-center justify-center bg-background p-6">
+      <div className="w-full max-w-2xl space-y-8 text-center">
+        <Logo />
+
+        <div>
+          <h1 className="font-serif text-3xl font-bold md:text-4xl">
+            Welcome to KrishiSetu
+          </h1>
+
+          <p className="mt-2 text-muted-foreground">
+            Tell us who you are, so we can show you the right screen.
+          </p>
+        </div>
+
+        <div className="grid gap-5 sm:grid-cols-2">
+          <button
+            type="button"
+            onClick={() => selectRole('farmer')}
+            className="group rounded-3xl border-2 border-border bg-card p-7 text-left shadow-sm transition hover:border-primary"
+          >
+            <div className="flex size-12 items-center justify-center rounded-2xl bg-primary/10 text-2xl">
+              🌾
+            </div>
+
+            <h2 className="mt-4 font-serif text-xl font-bold">
+              I&apos;m a Farmer
+            </h2>
+
+            <p className="mt-2 text-sm leading-6 text-muted-foreground">
+              Compare markets, plan logistics, and review buyer offers
+              for your produce.
+            </p>
+
+            <p className="mt-4 text-sm font-bold text-primary group-hover:underline">
+              Continue as Farmer →
+            </p>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => selectRole('buyer')}
+            className="group rounded-3xl border-2 border-border bg-card p-7 text-left shadow-sm transition hover:border-primary"
+          >
+            <div className="flex size-12 items-center justify-center rounded-2xl bg-accent/20 text-2xl">
+              🛒
+            </div>
+
+            <h2 className="mt-4 font-serif text-xl font-bold">
+              I&apos;m a Buyer
+            </h2>
+
+            <p className="mt-2 text-sm leading-6 text-muted-foreground">
+              Browse farmer listings and make offers directly on
+              KrishiSetu.
+            </p>
+
+            <p className="mt-4 text-sm font-bold text-primary group-hover:underline">
+              Continue as Buyer →
+            </p>
+          </button>
+        </div>
+
+        <p className="text-xs text-muted-foreground">
+          Prototype Simulation — role selection is not saved beyond
+          this session.
+        </p>
+      </div>
     </div>
   )
 }
@@ -514,12 +602,15 @@ function Dashboard({
               <input
                 type="number"
                 min="0"
+                max={unit === 'kg' ? 100000 : 1000}
                 value={quantity}
                 onChange={(event) => {
                   const value = Number(event.target.value)
-                  setQuantity(
+                  const capped = Math.min(
                     Number.isFinite(value) ? value : 0,
+                    unit === 'kg' ? 100000 : 1000,
                   )
+                  setQuantity(capped)
                 }}
                 className="min-w-0 flex-1 bg-transparent px-3 font-semibold outline-none"
                 aria-label="Quantity"
@@ -745,6 +836,8 @@ function Comparison({
     return <EmptyState back={back} />
   }
 
+  const topRecommendation = recommendations[0] ?? null
+
   return (
     <div className="space-y-7">
       <button
@@ -783,6 +876,14 @@ function Comparison({
           />
         ))}
       </div>
+
+      {topRecommendation && (
+        <SpoilageForecast
+          crop={crop}
+          quantity={quantity}
+          topRecommendation={topRecommendation}
+        />
+      )}
 
       <p className="text-xs text-muted-foreground">
         Sample / Historical Data · All values are estimates for
@@ -844,11 +945,10 @@ function MarketCard({
 
   return (
     <article
-      className={`relative rounded-2xl border bg-card p-5 shadow-sm ${
-        best
-          ? 'border-primary ring-2 ring-primary/10'
-          : 'border-border'
-      }`}
+      className={`relative rounded-2xl border bg-card p-5 shadow-sm ${best
+        ? 'border-primary ring-2 ring-primary/10'
+        : 'border-border'
+        }`}
     >
       {best && (
         <div className="absolute -top-3 left-5 rounded-full bg-accent px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-accent-foreground">
@@ -872,9 +972,7 @@ function MarketCard({
           </div>
         </div>
 
-        <span className="rounded-full bg-emerald-100 px-2.5 py-1 text-[10px] font-bold text-emerald-800">
-          {market.demand} DEMAND
-        </span>
+
       </div>
 
       <div className="mt-5 grid grid-cols-2 gap-4 border-y border-border py-4 text-sm">
@@ -919,6 +1017,136 @@ function MarketCard({
         </button>
       </div>
     </article>
+  )
+}
+
+/* -------------------------------------------------------------------------- */
+/* Spoilage & multiday forecast                                              */
+/* -------------------------------------------------------------------------- */
+
+function SpoilageForecast({
+  crop,
+  quantity,
+  topRecommendation,
+}: {
+  crop: Crop
+  quantity: number
+  topRecommendation: MarketRecommendation
+}) {
+  const forecast = getForecast(crop.name)
+
+  // forecast.ts projects midpoint change over ~7 days;
+  // convert to a daily rate for the multiday model.
+  const currentPrice = topRecommendation.revenue.pricePerQuintal
+  const changePercent =
+    currentPrice === 0
+      ? 0
+      : ((forecast.midpoint - currentPrice) / currentPrice) * 100
+  const dailyPriceChangePercent = changePercent / 7
+
+  const multiday = getMultidayForecast(
+    crop.name,
+    currentPrice,
+    quantity,
+    dailyPriceChangePercent,
+    7,
+  )
+
+  const bestDay = getBestSellDay(multiday)
+  const todaySpoilage = getSpoilagePercent(crop.name, 1)
+  const day7Spoilage = getSpoilagePercent(crop.name, 7)
+
+  const sellTodayRevenue = Math.round(currentPrice * quantity)
+
+  return (
+    <section className="rounded-2xl border border-border bg-card p-5">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
+            Potential spoilage
+          </p>
+
+          <h2 className="mt-1 font-serif text-xl font-bold">
+            Should you sell today or wait?
+          </h2>
+        </div>
+
+        <span className="rounded-full border border-accent bg-accent/20 px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-accent-foreground">
+          Prototype estimate
+        </span>
+      </div>
+
+      <div className="mt-5 grid gap-4 sm:grid-cols-3">
+        <Info
+          label="Spoilage after 1 day"
+          value={`${todaySpoilage}%`}
+        />
+
+        <Info
+          label="Spoilage after 7 days"
+          value={`${day7Spoilage}%`}
+        />
+
+        <Info
+          label="Sell today revenue"
+          value={money(sellTodayRevenue)}
+        />
+      </div>
+
+      <div className="mt-5 overflow-x-auto">
+        <table className="w-full min-w-[480px] text-sm">
+          <thead>
+            <tr className="text-left text-xs font-bold uppercase tracking-wide text-muted-foreground">
+              <th className="pb-2">Day</th>
+              <th className="pb-2">Projected price/q</th>
+              <th className="pb-2">Spoilage</th>
+              <th className="pb-2">Sellable qty</th>
+              <th className="pb-2">Effective revenue</th>
+            </tr>
+          </thead>
+
+          <tbody>
+            {multiday.map((point) => (
+              <tr
+                key={point.day}
+                className={`border-t border-border ${bestDay?.day === point.day
+                    ? 'bg-primary/5 font-bold text-primary'
+                    : ''
+                  }`}
+              >
+                <td className="py-2">Day {point.day}</td>
+                <td className="py-2">
+                  {money(point.projectedPricePerQuintal)}
+                </td>
+                <td className="py-2">{point.spoilagePercent}%</td>
+                <td className="py-2">
+                  {point.remainingQuantity} q
+                </td>
+                <td className="py-2">
+                  {money(point.effectiveRevenue)}
+                  {bestDay?.day === point.day && ' 🏆'}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      {bestDay && (
+        <p className="mt-4 text-sm font-bold text-primary">
+          {bestDay.effectiveRevenue > sellTodayRevenue
+            ? `Waiting until Day ${bestDay.day} nets ~${money(
+                bestDay.effectiveRevenue - sellTodayRevenue,
+              )} more, even after spoilage loss.`
+            : 'Spoilage outweighs any price gain — selling today is the safer estimate.'}
+        </p>
+      )}
+
+      <p className="mt-3 text-xs text-muted-foreground">
+        Spoilage rate and price drift are illustrative model
+        estimates, not guaranteed outcomes.
+      </p>
+    </section>
   )
 }
 
@@ -1174,11 +1402,10 @@ function Recommendation({
                 </p>
 
                 <p
-                  className={`mt-1 font-serif text-xl font-bold ${
-                    whatIfNet >= net
-                      ? 'text-emerald-700'
-                      : 'text-red-700'
-                  }`}
+                  className={`mt-1 font-serif text-xl font-bold ${whatIfNet >= net
+                    ? 'text-emerald-700'
+                    : 'text-red-700'
+                    }`}
                 >
                   {money(whatIfNet)}
                   {whatIfChanged && (
@@ -1388,11 +1615,10 @@ function Trends({
             type="button"
             key={item}
             onClick={() => setTrendCrop(item)}
-            className={`whitespace-nowrap rounded-lg px-4 py-2 text-xs font-bold ${
-              trendCrop === item
-                ? 'bg-card text-primary shadow-sm'
-                : 'text-muted-foreground'
-            }`}
+            className={`whitespace-nowrap rounded-lg px-4 py-2 text-xs font-bold ${trendCrop === item
+              ? 'bg-card text-primary shadow-sm'
+              : 'text-muted-foreground'
+              }`}
           >
             {item}
           </button>
@@ -1487,11 +1713,10 @@ function Trends({
               type="button"
               key={item}
               onClick={() => setTrendRange(item)}
-              className={`whitespace-nowrap rounded-lg px-4 py-2 text-xs font-bold ${
-                trendRange === item
-                  ? 'bg-card text-primary shadow-sm'
-                  : 'text-muted-foreground'
-              }`}
+              className={`whitespace-nowrap rounded-lg px-4 py-2 text-xs font-bold ${trendRange === item
+                ? 'bg-card text-primary shadow-sm'
+                : 'text-muted-foreground'
+                }`}
             >
               {item}
             </button>
@@ -1845,12 +2070,12 @@ function MobileNav({
   const items: Array<
     [string, View, typeof Home]
   > = [
-    [t.dashboard, 'dashboard', Home],
-    [t.markets, 'comparison', BarChart3],
-    ['Logistics', 'logistics', Truck],
-    [t.offers, 'offers', Package],
-    [t.trends, 'trends', TrendingUp],
-  ]
+      [t.dashboard, 'dashboard', Home],
+      [t.markets, 'comparison', BarChart3],
+      ['Logistics', 'logistics', Truck],
+      [t.offers, 'offers', Package],
+      [t.trends, 'trends', TrendingUp],
+    ]
 
   return (
     <nav className="fixed inset-x-0 bottom-0 z-20 flex justify-around border-t border-border bg-card/95 px-2 py-3 backdrop-blur lg:hidden">
@@ -1859,11 +2084,10 @@ function MobileNav({
           type="button"
           key={target}
           onClick={() => navigate(target)}
-          className={`flex flex-col items-center gap-1 text-[10px] font-bold ${
-            view === target
-              ? 'text-primary'
-              : 'text-muted-foreground'
-          }`}
+          className={`flex flex-col items-center gap-1 text-[10px] font-bold ${view === target
+            ? 'text-primary'
+            : 'text-muted-foreground'
+            }`}
         >
           <Icon className="size-5" />
           {label}
@@ -1878,6 +2102,9 @@ function MobileNav({
 /* -------------------------------------------------------------------------- */
 
 export default function Page() {
+  const [role, setRole] =
+    useState<'farmer' | 'buyer' | null>(null)
+
   const [view, setView] =
     useState<View>('dashboard')
 
@@ -1975,9 +2202,9 @@ export default function Page() {
 
   const netReturn = activeMarket
     ? activeMarket.revenue.grossRevenue -
-      selectedTransport -
-      activeMarket.revenue.handlingCost -
-      activeMarket.revenue.otherCosts
+    selectedTransport -
+    activeMarket.revenue.handlingCost -
+    activeMarket.revenue.otherCosts
     : 0
 
   const context = {
@@ -1987,6 +2214,19 @@ export default function Page() {
     market: activeMarket?.market.name ?? '',
     marketPrice: activeMarket?.revenue.pricePerQuintal ?? 0,
     netReturn,
+  }
+
+  if (!role) {
+    return (
+      <RoleSelect
+        selectRole={(selected) => {
+          setRole(selected)
+          setView(
+            selected === 'buyer' ? 'marketplace' : 'dashboard',
+          )
+        }}
+      />
+    )
   }
 
   return (
@@ -2041,11 +2281,10 @@ export default function Page() {
                   onClick={() =>
                     navigate(target as View)
                   }
-                  className={`block w-full rounded-xl p-3 text-left text-sm font-bold ${
-                    view === target
-                      ? 'bg-primary/10 text-primary'
-                      : ''
-                  }`}
+                  className={`block w-full rounded-xl p-3 text-left text-sm font-bold ${view === target
+                    ? 'bg-primary/10 text-primary'
+                    : ''
+                    }`}
                 >
                   {label}
                 </button>
@@ -2067,6 +2306,8 @@ export default function Page() {
           setOffline={setOffline}
           locationLabel={getLocationLabel(locationId)}
           t={t}
+          role={role}
+          switchRole={() => setRole(null)}
         />
 
         <main className="mx-auto w-full max-w-7xl flex-1 space-y-7 px-4 py-6 pb-28 md:px-8 md:py-8">
@@ -2148,6 +2389,8 @@ export default function Page() {
                 unit="quintals"
                 cropName={crop.name}
                 marketName={activeMarket.market.name}
+                distanceKm={activeMarket.market.distanceKm}
+                farmLocation={getLocationLabel(locationId)}
                 grossRevenue={
                   activeMarket.revenue.grossRevenue
                 }
@@ -2198,6 +2441,7 @@ export default function Page() {
                 setView('offers')
               }
               context={context}
+              setOffers={setOffers}
             />
           )}
 
@@ -2209,10 +2453,13 @@ export default function Page() {
                 setView('marketplace')
               }
               context={context}
+              goToLogistics={() =>
+                setView('logistics')
+              }
             />
           )}
 
-          <EvaluatorSections />
+          {view === 'dashboard' && <EvaluatorSections />}
         </main>
 
         <MobileNav

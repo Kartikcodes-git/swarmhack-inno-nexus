@@ -7,6 +7,7 @@ import {
   CheckCircle2,
   Clock3,
   MapPin,
+  Phone,
   Truck,
 } from "lucide-react"
 
@@ -23,6 +24,8 @@ type Props = {
   unit: string
   cropName: string
   marketName: string
+  distanceKm: number
+  farmLocation: string
   grossRevenue: number
   otherCosts: number
   existingTransportCost: number
@@ -35,6 +38,8 @@ export function Logistics({
   unit,
   cropName,
   marketName,
+  distanceKm,
+  farmLocation,
   grossRevenue,
   otherCosts,
   existingTransportCost,
@@ -47,13 +52,14 @@ export function Logistics({
   const [pickupScheduled, setPickupScheduled] = useState(false)
   const [pickupDate, setPickupDate] = useState("")
   const [pickupTime, setPickupTime] = useState("")
+  const [driverContact, setDriverContact] = useState("")
 
   const quantityInQuintals =
     unit === "kg" ? quantity / 100 : quantity
 
   const options = useMemo(
-    () => getLogisticsOptions(quantityInQuintals),
-    [quantityInQuintals]
+    () => getLogisticsOptions(quantityInQuintals, distanceKm),
+    [quantityInQuintals, distanceKm]
   )
 
   const selected = options.find(
@@ -68,8 +74,11 @@ export function Logistics({
     selectedTransportCost -
     otherCosts
 
+  const isValidContact =
+    /^\d{10}$/.test(driverContact)
+
   const canSchedule =
-    Boolean(selected && pickupDate && pickupTime)
+    Boolean(selected && pickupDate && pickupTime && isValidContact)
 
   function selectTransport(option: LogisticsOption) {
     setSelectedId(option.id)
@@ -100,7 +109,7 @@ export function Logistics({
         </div>
       </div>
 
-      {/* Produce summary */}
+      {/* Produce + route summary */}
       <div className="rounded-2xl border border-border bg-card p-5">
         <div className="grid gap-4 sm:grid-cols-2">
           <div>
@@ -115,12 +124,12 @@ export function Logistics({
 
           <div>
             <p className="text-sm text-muted-foreground">
-              Destination
+              Route
             </p>
 
             <p className="mt-1 flex items-center gap-1 font-bold">
               <MapPin className="size-4 text-primary" />
-              {marketName}
+              {farmLocation} → {marketName} ({distanceKm} km)
             </p>
           </div>
         </div>
@@ -167,10 +176,17 @@ export function Logistics({
                 </h3>
 
                 <p className="mt-1 text-sm text-muted-foreground">
-                  Capacity: {option.capacity} q/trip
+                  Capacity: {option.capacityQuintals} q/trip
                 </p>
 
                 <div className="mt-4 space-y-2 text-sm">
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">
+                      Rate
+                    </span>
+                    <strong>₹{option.ratePerKm}/km</strong>
+                  </div>
+
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">
                       Required trips
@@ -297,6 +313,36 @@ export function Logistics({
                   className="h-12 w-full rounded-xl border border-input bg-background px-3"
                 />
               </label>
+
+              <label className="space-y-2 sm:col-span-2">
+                <span className="text-sm font-semibold">
+                  Driver contact number
+                </span>
+
+                <div className="relative">
+                  <Phone className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+
+                  <input
+                    type="tel"
+                    inputMode="numeric"
+                    maxLength={10}
+                    value={driverContact}
+                    onChange={(e) =>
+                      setDriverContact(
+                        e.target.value.replace(/\D/g, "").slice(0, 10)
+                      )
+                    }
+                    placeholder="10-digit mobile number"
+                    className="h-12 w-full rounded-xl border border-input bg-background pl-9 pr-3"
+                  />
+                </div>
+
+                {driverContact.length > 0 && !isValidContact && (
+                  <span className="text-xs text-destructive">
+                    Enter a valid 10-digit number
+                  </span>
+                )}
+              </label>
             </div>
 
             <button
@@ -325,7 +371,11 @@ export function Logistics({
                   </p>
 
                   <p className="mt-1 text-sm text-muted-foreground">
-                    {pickupDate} at {pickupTime}
+                    {farmLocation} → {marketName} · {pickupDate} at {pickupTime}
+                  </p>
+
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    Driver contact: {driverContact}
                   </p>
 
                   <p className="mt-3 text-xs font-semibold text-muted-foreground">
