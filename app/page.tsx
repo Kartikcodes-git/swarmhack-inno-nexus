@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import {
   BarChart3,
   CheckCircle2,
@@ -44,8 +44,14 @@ import {
 import {
   locations as allLocations,
   defaultLocation,
+  getLocationById,
   getLocationLabel,
 } from '@/lib/locations'
+
+import {
+  fetchLivePrices,
+  pickDistrictModalPrice,
+} from '@/lib/live-prices'
 
 import { useLanguage, type Labels, type Language } from '@/lib/language'
 
@@ -1838,7 +1844,47 @@ function Trends({
   const [trendRange, setTrendRange] =
     useState<'7 Days' | '30 Days' | '6 Months'>('7 Days')
 
-  const stats = getTrendStats(trendCrop, trendRange, locationId)
+  const [livePrice, setLivePrice] =
+    useState<number | null>(null)
+
+  const [liveStatus, setLiveStatus] =
+    useState<'loading' | 'live' | 'static'>('loading')
+
+  // Refetch whenever the crop or city changes. Falls back to the
+  // static markets.ts anchor (liveStatus 'static') if the API has
+  // no row for this district/commodity, or the request fails —
+  // getTrendStats handles that fallback itself via locationId.
+  useEffect(() => {
+    let cancelled = false
+    setLiveStatus('loading')
+
+    const district = getLocationById(locationId).district
+
+    fetchLivePrices(trendCrop, 'Maharashtra')
+      .then((records) => {
+        if (cancelled) return
+
+        const price = pickDistrictModalPrice(records, district)
+        setLivePrice(price)
+        setLiveStatus(price != null ? 'live' : 'static')
+      })
+      .catch(() => {
+        if (cancelled) return
+        setLivePrice(null)
+        setLiveStatus('static')
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [trendCrop, locationId])
+
+  const stats = getTrendStats(
+    trendCrop,
+    trendRange,
+    locationId,
+    liveStatus === 'loading' ? undefined : livePrice,
+  )
 
   const chartMin = Math.min(...stats.values)
   const chartMax = Math.max(...stats.values)
@@ -1895,21 +1941,37 @@ function Trends({
             </p>
           </div>
 
-          <span
-            className={`rounded-full px-3 py-1 text-xs font-bold ${
-              stats.trend === 'Increasing'
-                ? 'bg-emerald-100 text-emerald-800'
+          <div className="flex flex-col items-end gap-2">
+            <span
+              className={`rounded-full px-3 py-1 text-xs font-bold ${
+                stats.trend === 'Increasing'
+                  ? 'bg-emerald-100 text-emerald-800'
+                  : stats.trend === 'Decreasing'
+                    ? 'bg-red-100 text-red-800'
+                    : 'bg-muted text-muted-foreground'
+              }`}
+            >
+              {stats.trend === 'Increasing'
+                ? '↑ Increasing'
                 : stats.trend === 'Decreasing'
-                  ? 'bg-red-100 text-red-800'
+                  ? '↓ Decreasing'
+                  : '→ Stable'}
+            </span>
+
+            <span
+              className={`rounded-full px-2.5 py-1 text-[10px] font-bold ${
+                liveStatus === 'live'
+                  ? 'bg-primary/10 text-primary'
                   : 'bg-muted text-muted-foreground'
-            }`}
-          >
-            {stats.trend === 'Increasing'
-              ? '↑ Increasing'
-              : stats.trend === 'Decreasing'
-                ? '↓ Decreasing'
-                : '→ Stable'}
-          </span>
+              }`}
+            >
+              {liveStatus === 'loading'
+                ? 'Checking live price…'
+                : liveStatus === 'live'
+                  ? '● Live mandi price'
+                  : 'Estimated (no live data)'}
+            </span>
+          </div>
         </div>
 
         <div className="mt-8 flex h-52 items-end gap-2 border-b border-l border-border px-3 pt-4">

@@ -226,15 +226,20 @@ export function getTrendStats(
   cropName: CropName,
   range: TrendRange,
   locationId?: string,
+  liveAnchorPrice?: number | null,
 ) {
   const baseValues = historicalSeries[cropName][range]
 
-  // Scale the whole series so it lands on the real local market
-  // price instead of the national base price — same shape, shifted
-  // to match this location's actual current rate.
-  const anchor = locationId
-    ? getLocationAnchorPrice(cropName, locationId)
-    : null
+  // Live mandi price (from Agmarknet, via the /api/mandi-prices
+  // route) wins when available. Falls back to the static markets.ts
+  // anchor, then to the unscaled national series — same shape,
+  // shifted to whichever price we actually have.
+  const anchor =
+    liveAnchorPrice != null
+      ? liveAnchorPrice
+      : locationId
+        ? getLocationAnchorPrice(cropName, locationId)
+        : null
 
   const lastBase = baseValues.at(-1) ?? 0
   const scale =
@@ -264,5 +269,8 @@ export function getTrendStats(
     lowest: Math.min(...values),
     trend,
     values,
+    source: (liveAnchorPrice != null
+      ? 'live'
+      : 'static') as 'live' | 'static',
   }
 }
