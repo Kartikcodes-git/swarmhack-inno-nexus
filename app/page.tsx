@@ -399,12 +399,14 @@ function Login({
   const [farmerName, setLocalFarmerName] = useState('')
   const [buyerName, setBuyerName] = useState('')
   const [businessName, setBusinessName] = useState('')
+  const [farmerId, setFarmerId] = useState<File | null>(null)
   const [error, setError] = useState('')
 
   const isValidPhone = /^\d{10}$/.test(phone)
   const isValidOtp = /^\d{4}$/.test(otp)
 
-  const isValidFarmerDetails = farmerName.trim().length > 0
+  const isValidFarmerDetails =
+    farmerName.trim().length > 0
 
   const isValidBuyerDetails =
     buyerName.trim().length > 0 && businessName.trim().length > 0
@@ -552,6 +554,32 @@ function Login({
                   />
                 </div>
               </label>
+
+              {role === 'farmer' && (
+                <>
+                  <label className="mt-5 block space-y-2">
+                    <span className="text-sm font-semibold">
+                      Upload ID
+                    </span>
+                    <span className="block text-xs text-muted-foreground">
+                      Digital Farmer ID (Kisan Pehchan Patra)
+                    </span>
+                    <input
+                      type="file"
+                      accept=".pdf,.jpg,.jpeg,.png"
+                      onChange={(e) => {
+                        setFarmerId(e.target.files?.[0] ?? null)
+                        setError('')
+                      }}
+                      className="block w-full cursor-pointer rounded-xl border border-input bg-background p-3 text-sm file:mr-4 file:rounded-lg file:border-0 file:bg-primary file:px-3 file:py-2 file:text-sm file:font-semibold file:text-primary-foreground"
+                    />
+                    {farmerId && (
+                      <p className="text-xs text-primary">✓ {farmerId.name}</p>
+                    )}
+                  </label>
+
+                </>
+              )}
 
               {error && (
                 <p className="mt-3 text-xs text-destructive">{error}</p>
@@ -2604,20 +2632,13 @@ export default function Page() {
   const activeMarket = selectedMarket ?? topRecommendation
 
   const navigate = (next: View) => {
-    // Buyers should only access buyer marketplace, grading and logistics.
-    // Farmers keep the market-analysis and buyer-offer workflow.
-    const buyerAllowed: View[] = ['marketplace', 'grading', 'logistics', 'transport-confirmed']
-    if (role === 'buyer' && !buyerAllowed.includes(next)) {
-      setView('marketplace')
-    } else {
-      setView(next)
-    }
+    setView(next)
     setMobileMenu(false)
   }
 
   const demo = () => {
-    setRole('farmer')
     setView('dashboard')
+    setRole('farmer')
     setPhone('demo')
     setFarmerName('')
     setBuyerName('')
@@ -2637,13 +2658,17 @@ export default function Page() {
   }
 
   const goToGrading = (offerId: string) => {
-    if (role !== 'buyer') return
+    if (role !== 'buyer') {
+      return
+    }
 
     const acceptedOffer = offers.find(
       (offer) => offer.id === offerId && offer.status === 'Accepted',
     )
 
-    if (!acceptedOffer) return
+    if (!acceptedOffer) {
+      return
+    }
 
     setGradingOfferId(offerId)
     setView('grading')
@@ -2916,7 +2941,7 @@ export default function Page() {
                   activeMarket.revenue.transportCost
                 }
                 onBack={() =>
-                  setView(role === 'buyer' ? 'marketplace' : 'dashboard')
+                  setView('dashboard')
                 }
                 onConfirmTransport={(payload) => {
                   setTransportCost(payload.totalCost)
@@ -2926,7 +2951,7 @@ export default function Page() {
               />
             ) : (
               <EmptyState
-                back={() => setView(role === 'buyer' ? 'marketplace' : 'dashboard')}
+                back={() => setView('dashboard')}
               />
             ))}
 
@@ -2948,7 +2973,7 @@ export default function Page() {
                 pickupDate={transportConfirmation.pickupDate}
                 pickupTime={transportConfirmation.pickupTime}
                 driverContact={transportConfirmation.driverContact}
-                done={() => setView(role === 'buyer' ? 'marketplace' : 'dashboard')}
+                done={() => setView('dashboard')}
               />
             )}
 
@@ -3007,7 +3032,7 @@ export default function Page() {
               />
             ) : (
               <EmptyState
-                back={() => setView('offers')}
+                back={() => setView(role === 'buyer' ? 'marketplace' : 'dashboard')}
               />
             ))}
 
@@ -3024,7 +3049,6 @@ export default function Page() {
               />
             ))}
 
-          {view === 'dashboard' && <EvaluatorSections />}
         </main>
 
         <MobileNav
