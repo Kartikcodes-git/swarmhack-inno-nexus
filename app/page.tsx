@@ -390,6 +390,10 @@ function Login({
   const [phone, setPhone] = useState('')
   const [otp, setOtp] = useState('')
   const [sentOtp, setSentOtp] = useState<string | null>(null)
+
+  const [farmerId, setFarmerId] = useState<File | null>(null)
+  const [qualityCertificate, setQualityCertificate] = useState<File | null>(null)
+
   const [error, setError] = useState('')
 
   const isValidPhone = /^\d{10}$/.test(phone)
@@ -398,6 +402,11 @@ function Login({
   function sendOtp() {
     if (!isValidPhone) {
       setError('Enter a valid 10-digit mobile number')
+      return
+    }
+
+    if (!farmerId) {
+      setError('Please upload your Digital Farmer ID (Kisan Pehchan Patra)')
       return
     }
 
@@ -439,14 +448,15 @@ function Login({
           </div>
 
           <p className="mt-2 text-center text-sm text-muted-foreground">
-            Enter your mobile number to continue
+            Enter your details to continue
           </p>
 
           {!sentOtp ? (
             <>
+              {/* Mobile Number */}
               <label className="mt-6 block space-y-2">
                 <span className="text-sm font-semibold">
-                  Mobile number
+                  Mobile number <span className="text-destructive">*</span>
                 </span>
 
                 <div className="relative">
@@ -468,31 +478,82 @@ function Login({
                 </div>
               </label>
 
+              {/* Digital Farmer ID - Required */}
+              <label className="mt-5 block space-y-2">
+                <span className="text-sm font-semibold">
+                  Upload ID <span className="text-destructive">*</span>
+                </span>
+
+                <span className="block text-xs text-muted-foreground">
+                  Digital Farmer ID (Kisan Pehchan Patra)
+                </span>
+
+                <input
+                  type="file"
+                  accept=".pdf,.jpg,.jpeg,.png"
+                  required
+                  onChange={(e) => {
+                    setFarmerId(e.target.files?.[0] ?? null)
+                    setError('')
+                  }}
+                  className="block w-full cursor-pointer rounded-xl border border-input bg-background p-3 text-sm file:mr-4 file:rounded-lg file:border-0 file:bg-primary file:px-3 file:py-2 file:text-sm file:font-semibold file:text-primary-foreground"
+                />
+
+                {farmerId && (
+                  <p className="text-xs text-primary">
+                    ✓ {farmerId.name}
+                  </p>
+                )}
+              </label>
+
+              {/* Quality Certificate - Optional */}
+              <label className="mt-5 block space-y-2">
+                <span className="text-sm font-semibold">
+                  Quality Certificate
+                </span>
+
+                <span className="block text-xs text-muted-foreground">
+                  Approved Quality Certificate of Crops — Optional
+                </span>
+
+                <input
+                  type="file"
+                  accept=".pdf,.jpg,.jpeg,.png"
+                  onChange={(e) => {
+                    setQualityCertificate(e.target.files?.[0] ?? null)
+                    setError('')
+                  }}
+                  className="block w-full cursor-pointer rounded-xl border border-input bg-background p-3 text-sm file:mr-4 file:rounded-lg file:border-0 file:bg-primary file:px-3 file:py-2 file:text-sm file:font-semibold file:text-primary-foreground"
+                />
+
+                {qualityCertificate && (
+                  <p className="text-xs text-primary">
+                    ✓ {qualityCertificate.name}
+                  </p>
+                )}
+              </label>
+
+              {/* Error */}
               {error && (
-                <p className="mt-2 text-xs text-destructive">
+                <p className="mt-3 text-xs text-destructive">
                   {error}
                 </p>
               )}
 
+              {/* Send OTP */}
               <button
                 type="button"
-                disabled={!isValidPhone}
                 onClick={sendOtp}
-                className="mt-5 flex min-h-12 w-full items-center justify-center rounded-xl bg-primary font-bold text-primary-foreground disabled:cursor-not-allowed disabled:opacity-50"
+                disabled={!isValidPhone || !farmerId}
+                className="mt-6 h-12 w-full rounded-xl bg-primary px-4 font-bold text-primary-foreground transition-opacity disabled:cursor-not-allowed disabled:opacity-50"
               >
                 Send OTP
               </button>
             </>
           ) : (
             <>
-              <p className="mt-6 text-sm text-muted-foreground">
-                OTP sent to +91 {phone}.{' '}
-                <span className="font-bold text-primary">
-                  (demo OTP: {sentOtp})
-                </span>
-              </p>
-
-              <label className="mt-4 block space-y-2">
+              {/* OTP */}
+              <label className="mt-6 block space-y-2">
                 <span className="text-sm font-semibold">
                   Enter OTP
                 </span>
@@ -508,23 +569,27 @@ function Login({
                     )
                   }
                   placeholder="4-digit OTP"
-                  className="h-12 w-full rounded-xl border border-input bg-background px-3 text-center text-lg tracking-[0.5em]"
+                  className="h-12 w-full rounded-xl border border-input bg-background px-3 text-center text-lg tracking-[0.4em]"
                 />
               </label>
 
+              <p className="mt-3 text-xs text-muted-foreground">
+                OTP sent to +91 {phone}
+              </p>
+
               {error && (
-                <p className="mt-2 text-xs text-destructive">
+                <p className="mt-3 text-xs text-destructive">
                   {error}
                 </p>
               )}
 
               <button
                 type="button"
-                disabled={!isValidOtp}
                 onClick={verifyOtp}
-                className="mt-5 flex min-h-12 w-full items-center justify-center rounded-xl bg-primary font-bold text-primary-foreground disabled:cursor-not-allowed disabled:opacity-50"
+                disabled={!isValidOtp}
+                className="mt-6 h-12 w-full rounded-xl bg-primary px-4 font-bold text-primary-foreground transition-opacity disabled:cursor-not-allowed disabled:opacity-50"
               >
-                Verify &amp; Continue
+                Verify OTP
               </button>
 
               <button
@@ -534,9 +599,9 @@ function Login({
                   setOtp('')
                   setError('')
                 }}
-                className="mt-3 w-full text-center text-xs font-semibold text-muted-foreground"
+                className="mt-3 w-full text-sm font-semibold text-muted-foreground hover:text-foreground"
               >
-                Change number
+                Change details
               </button>
             </>
           )}
@@ -736,9 +801,7 @@ function Dashboard({
             </h2>
           </div>
 
-          <span className="rounded-full bg-primary-foreground/10 px-3 py-1 text-xs">
-            Demo estimate
-          </span>
+         
         </div>
 
         <div className="mt-7 grid gap-4 md:grid-cols-3">
@@ -1063,10 +1126,7 @@ function Comparison({
         />
       )}
 
-      <p className="text-xs text-muted-foreground">
-        Sample / Historical Data · All values are estimates for
-        prototype demonstration.
-      </p>
+     
     </div>
   )
 }
@@ -1819,10 +1879,7 @@ function Calculation({
         </div>
       </div>
 
-      <div className="rounded-xl bg-accent/20 p-4 text-sm text-accent-foreground">
-        <strong>Note:</strong> All values shown are estimates
-        for prototype demonstration.
-      </div>
+     
     </div>
   )
 }
@@ -2133,7 +2190,7 @@ function Forecast({
         </div>
 
         <span className="rounded-full border border-accent bg-accent/20 px-3 py-1 text-xs font-bold text-accent-foreground">
-          Prototype Forecast
+          Market Forecast and Design Engine
         </span>
       </div>
 
