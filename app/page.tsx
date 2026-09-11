@@ -1827,8 +1827,10 @@ function Calculation({
 
 function Trends({
   openForecast,
+  locationId,
 }: {
   openForecast: () => void
+  locationId: string
 }) {
   const [trendCrop, setTrendCrop] =
     useState<keyof typeof historicalSeries>('Onion')
@@ -1836,7 +1838,7 @@ function Trends({
   const [trendRange, setTrendRange] =
     useState<'7 Days' | '30 Days' | '6 Months'>('7 Days')
 
-  const stats = getTrendStats(trendCrop, trendRange)
+  const stats = getTrendStats(trendCrop, trendRange, locationId)
 
   const chartMin = Math.min(...stats.values)
   const chartMax = Math.max(...stats.values)
@@ -1893,8 +1895,20 @@ function Trends({
             </p>
           </div>
 
-          <span className="rounded-full bg-emerald-100 px-3 py-1 text-xs font-bold text-emerald-800">
-            ↑ Increasing
+          <span
+            className={`rounded-full px-3 py-1 text-xs font-bold ${
+              stats.trend === 'Increasing'
+                ? 'bg-emerald-100 text-emerald-800'
+                : stats.trend === 'Decreasing'
+                  ? 'bg-red-100 text-red-800'
+                  : 'bg-muted text-muted-foreground'
+            }`}
+          >
+            {stats.trend === 'Increasing'
+              ? '↑ Increasing'
+              : stats.trend === 'Decreasing'
+                ? '↓ Decreasing'
+                : '→ Stable'}
           </span>
         </div>
 
@@ -1946,7 +1960,7 @@ function Trends({
 
           <Info
             label="Trend"
-            value="Increasing"
+            value={stats.trend}
           />
         </div>
 
@@ -2763,6 +2777,7 @@ export default function Page() {
 
           {view === 'trends' && (
             <Trends
+              locationId={locationId}
               openForecast={() =>
                 setView('forecast')
               }
