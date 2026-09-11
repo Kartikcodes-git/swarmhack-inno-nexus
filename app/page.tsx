@@ -583,28 +583,7 @@ function Login({
                     )}
                   </label>
 
-                  <label className="mt-5 block space-y-2">
-                    <span className="text-sm font-semibold">
-                      Quality Certificate
-                    </span>
-                    <span className="block text-xs text-muted-foreground">
-                      Approved Quality Certificate of Crops — Optional
-                    </span>
-                    <input
-                      type="file"
-                      accept=".pdf,.jpg,.jpeg,.png"
-                      onChange={(e) => {
-                        setQualityCertificate(e.target.files?.[0] ?? null)
-                        setError('')
-                      }}
-                      className="block w-full cursor-pointer rounded-xl border border-input bg-background p-3 text-sm file:mr-4 file:rounded-lg file:border-0 file:bg-primary file:px-3 file:py-2 file:text-sm file:font-semibold file:text-primary-foreground"
-                    />
-                    {qualityCertificate && (
-                      <p className="text-xs text-primary">
-                        ✓ {qualityCertificate.name}
-                      </p>
-                    )}
-                  </label>
+                
                 </>
               )}
 
