@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Check, MapPin, Phone, X } from 'lucide-react'
 import { useLanguage } from '@/lib/language'
 import { crops } from '@/lib/crops'
@@ -18,6 +18,7 @@ type Listing = {
   price: number
   date: string
   quality: string
+  isLive?: boolean
 }
 
 type OfferStatus = 'Pending' | 'Accepted' | 'Rejected'
@@ -95,6 +96,83 @@ const buyers = [
 
 const money = (value: number) =>
   `₹${Math.round(value).toLocaleString('en-IN')}`
+
+/* -------------------------------------------------------------------------- */
+/* Live mandi prices (real data.gov.in data, Maharashtra)                    */
+/* -------------------------------------------------------------------------- */
+
+type MandiRecord = {
+  state: string
+  district: string
+  market: string
+  commodity: string
+  variety: string
+  arrival_date: string
+  min_price: string
+  max_price: string
+  modal_price: string
+}
+
+// Real API se listing.crop jo naam use karta hai usse map karne ke liye —
+// agmarknet me kabhi kabhi thoda alag naming milta hai.
+const CROP_TO_COMMODITY: Record<string, string> = {
+  Onion: 'Onion',
+  Tomato: 'Tomato',
+  Wheat: 'Wheat',
+  Soybean: 'Soyabean',
+  Cotton: 'Cotton',
+  Potato: 'Potato',
+  Maize: 'Maize',
+  Gram: 'Gram',
+}
+
+function useMandiPrices() {
+  const [prices, setPrices] = useState<Record<string, number>>({})
+
+  useEffect(() => {
+    let cancelled = false
+
+    fetch('/api/mandi-prices?state=Maharashtra&limit=500')
+      .then((res) => res.json())
+      .then((data: { records?: MandiRecord[] }) => {
+        if (cancelled) return
+
+        const records = data.records ?? []
+        const sums: Record<string, { total: number; count: number }> = {}
+
+        records.forEach((record) => {
+          const modal = Number(record.modal_price)
+
+          if (!record.commodity || !Number.isFinite(modal) || modal <= 0) {
+            return
+          }
+
+          const key = record.commodity.trim()
+          sums[key] = sums[key] ?? { total: 0, count: 0 }
+          sums[key].total += modal
+          sums[key].count += 1
+        })
+
+        const averages: Record<string, number> = {}
+
+        Object.entries(sums).forEach(([commodity, { total, count }]) => {
+          averages[commodity] = Math.round(total / count)
+        })
+
+        setPrices(averages)
+      })
+      .catch(() => {
+        // Live prices unavailable — listings quietly fall back to
+        // their prototype price, nothing breaks.
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  return prices
+}
 
 function Badge({
   children,
@@ -304,9 +382,11 @@ function OfferModal({
 function ListingCard({
   listing,
   open,
+  isLive,
 }: {
   listing: Listing
   open: (listing: Listing) => void
+  isLive?: boolean
 }) {
   return (
     <article className="rounded-2xl border border-border bg-card p-5 shadow-sm">
@@ -321,7 +401,10 @@ function ListingCard({
           </p>
         </div>
 
-        <Badge tone="green">{listing.quality}</Badge>
+        <div className="flex flex-col items-end gap-1.5">
+          <Badge tone="green">{listing.quality}</Badge>
+          {isLive && <Badge tone="amber">Live Mandi Price</Badge>}
+        </div>
       </div>
 
       <div className="mt-5 grid grid-cols-2 gap-4 border-y border-border py-4 text-sm">
@@ -449,6 +532,8 @@ export function BuyerMarketplace({
 }) {
   const { t } = useLanguage()
 
+  const mandiPrices = useMandiPrices()
+
   const [cropFilter, setCropFilter] = useState('All crops')
   const [locationFilter, setLocationFilter] = useState('All locations')
   const [minPrice, setMinPrice] = useState('')
@@ -456,16 +541,30 @@ export function BuyerMarketplace({
   const [submitted, setSubmitted] = useState<Offer | null>(null)
   const [showMyOffers, setShowMyOffers] = useState(false)
 
+  // Farmer/quantity/quality still prototype data (govt API doesn't have
+  // per-farmer listings) — but price, where a real match exists, comes
+  // from live Maharashtra mandi data instead of the hardcoded number.
+  const liveListings = useMemo(() => {
+    return listings.map((listing) => {
+      const commodity = CROP_TO_COMMODITY[listing.crop]
+      const realPrice = commodity ? mandiPrices[commodity] : undefined
+
+      return realPrice
+        ? { ...listing, price: realPrice, isLive: true }
+        : { ...listing, isLive: false }
+    })
+  }, [mandiPrices])
+
   const filtered = useMemo(
     () =>
-      listings.filter(
+      liveListings.filter(
         (item) =>
           (cropFilter === 'All crops' || item.crop === cropFilter) &&
           (locationFilter === 'All locations' ||
             item.location === locationFilter) &&
           (!minPrice || item.price >= Number(minPrice)),
       ),
-    [cropFilter, locationFilter, minPrice],
+    [liveListings, cropFilter, locationFilter, minPrice],
   )
 
   return (
@@ -574,6 +673,7 @@ export function BuyerMarketplace({
             key={listing.id}
             listing={listing}
             open={setSelected}
+            isLive={listing.isLive}
           />
         ))}
       </div>
