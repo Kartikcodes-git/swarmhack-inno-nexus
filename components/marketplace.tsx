@@ -8,9 +8,9 @@ import { locations } from '@/lib/locations'
 
 export type MarketplaceView = 'marketplace' | 'offers'
 
-/* -------------------------------------------------------------------------- */
-/* Types                                                                      */
-/* -------------------------------------------------------------------------- */
+export type QualityGrade = 'A' | 'B' | 'C'
+
+type OfferStatus = 'Pending' | 'Accepted' | 'Rejected'
 
 type Listing = {
   id: string
@@ -22,15 +22,6 @@ type Listing = {
   date: string
   quality: string
 }
-
-type ListingWithPrice = Listing & {
-  price: number | null
-  isLive: boolean
-}
-
-type OfferStatus = 'Pending' | 'Accepted' | 'Rejected'
-
-export type QualityGrade = 'A' | 'B' | 'C'
 
 export type Offer = {
   id: string
@@ -47,8 +38,190 @@ export type Offer = {
 }
 
 /* -------------------------------------------------------------------------- */
-/* Marketplace listings                                                       */
-/* IMPORTANT: There is NO price here. Price comes only from API.             */
+/* Helpers                                                                    */
+/* -------------------------------------------------------------------------- */
+
+const money = (value: number) =>
+  `₹${Math.round(value).toLocaleString('en-IN')}`
+
+function normalizeCropName(value: string) {
+  return value
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]/g, '')
+}
+
+/*
+ * These are ONLY name mappings.
+ * There are NO prices here.
+ *
+ * Government mandi data can use names such as:
+ * Soyabean instead of Soybean
+ * Arhar instead of Tur
+ * Bengal Gram instead of Gram
+ */
+const CROP_ALIASES: Record<string, string[]> = {
+  onion: ['onion'],
+  tomato: ['tomato'],
+  wheat: ['wheat'],
+  soybean: ['soybean', 'soyabean', 'soya bean', 'soya'],
+  cotton: ['cotton'],
+  potato: ['potato'],
+  maize: ['maize', 'corn'],
+  gram: ['gram', 'bengal gram', 'chickpea', 'chana'],
+  tur: ['tur', 'arhar', 'red gram'],
+  bajra: ['bajra', 'pearl millet'],
+  jowar: ['jowar', 'sorghum'],
+  groundnut: ['groundnut', 'peanut'],
+  mustard: ['mustard'],
+  rice: ['rice', 'paddy'],
+}
+
+function commodityMatchesCrop(
+  apiCommodity: string,
+  cropName: string,
+) {
+  const api = normalizeCropName(apiCommodity)
+  const crop = normalizeCropName(cropName)
+
+  if (api === crop) return true
+
+  const aliases = CROP_ALIASES[crop]
+
+  if (!aliases) {
+    return api.includes(crop) || crop.includes(api)
+  }
+
+  return aliases.some((alias) => {
+    const normalizedAlias = normalizeCropName(alias)
+
+    return (
+      api === normalizedAlias ||
+      api.includes(normalizedAlias) ||
+      normalizedAlias.includes(api)
+    )
+  })
+}
+
+/* -------------------------------------------------------------------------- */
+/* Government API types                                                       */
+/* -------------------------------------------------------------------------- */
+
+type MandiRecord = {
+  state?: string
+  district?: string
+  market?: string
+  commodity?: string
+  variety?: string
+  arrival_date?: string
+  min_price?: string | number
+  max_price?: string | number
+  modal_price?: string | number
+}
+
+type MandiApiResponse = {
+  records?: MandiRecord[]
+}
+
+/* -------------------------------------------------------------------------- */
+/* Live mandi prices                                                          */
+/* -------------------------------------------------------------------------- */
+
+function useMandiPrices() {
+  const [records, setRecords] = useState<MandiRecord[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(false)
+
+  useEffect(() => {
+    let cancelled = false
+
+    async function loadPrices() {
+      try {
+        setLoading(true)
+        setError(false)
+
+        const response = await fetch(
+          '/api/mandi-prices?state=Maharashtra&limit=5000',
+          {
+            cache: 'no-store',
+          },
+        )
+
+        if (!response.ok) {
+          throw new Error('Failed to fetch mandi prices')
+        }
+
+        const data: MandiApiResponse = await response.json()
+
+        if (!cancelled) {
+          setRecords(data.records ?? [])
+        }
+      } catch (err) {
+        console.error('Mandi price fetch failed:', err)
+
+        if (!cancelled) {
+          setRecords([])
+          setError(true)
+        }
+      } finally {
+        if (!cancelled) {
+          setLoading(false)
+        }
+      }
+    }
+
+    loadPrices()
+
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  const getCropPrice = (cropName: string): number | null => {
+    const matchingRecords = records.filter((record) => {
+      if (!record.commodity) return false
+
+      return commodityMatchesCrop(
+        record.commodity,
+        cropName,
+      )
+    })
+
+    const prices = matchingRecords
+      .map((record) => Number(record.modal_price))
+      .filter(
+        (price) =>
+          Number.isFinite(price) && price > 0,
+      )
+
+    if (prices.length === 0) {
+      return null
+    }
+
+    /*
+     * Average modal price from all matching Maharashtra mandi
+     * records returned by the government API.
+     */
+    const average =
+      prices.reduce((sum, price) => sum + price, 0) /
+      prices.length
+
+    return Math.round(average)
+  }
+
+  return {
+    records,
+    loading,
+    error,
+    getCropPrice,
+  }
+}
+
+/* -------------------------------------------------------------------------- */
+/* Prototype listings                                                         */
+/*                                                                            */
+/* Farmer / quantity / location are still prototype data.                    */
+/* PRICE IS INTENTIONALLY NOT STORED HERE.                                   */
 /* -------------------------------------------------------------------------- */
 
 const listings: Listing[] = [
@@ -67,7 +240,7 @@ const listings: Listing[] = [
     crop: 'Onion',
     icon: '🧅',
     farmer: 'Suresh Jadhav',
-    location: 'Nashik, Maharashtra',
+    location: 'Nashik',
     quantity: 35,
     date: '6 Sept 2026',
     quality: 'Grade A',
@@ -77,7 +250,7 @@ const listings: Listing[] = [
     crop: 'Tomato',
     icon: '🍅',
     farmer: 'Meena Shinde',
-    location: 'Pune, Maharashtra',
+    location: 'Pune',
     quantity: 15,
     date: '5 Sept 2026',
     quality: 'Grade A',
@@ -87,17 +260,65 @@ const listings: Listing[] = [
     crop: 'Soybean',
     icon: '🌱',
     farmer: 'Vilas Pawar',
-    location: 'Ahilyanagar, Maharashtra',
+    location: 'Ahilyanagar',
     quantity: 30,
     date: '7 Sept 2026',
+    quality: 'Grade A',
+  },
+  {
+    id: 'wheat-20',
+    crop: 'Wheat',
+    icon: '🌾',
+    farmer: 'Mahesh Pawar',
+    location: 'Pune',
+    quantity: 20,
+    date: '7 Sept 2026',
+    quality: 'Grade A',
+  },
+  {
+    id: 'cotton-25',
+    crop: 'Cotton',
+    icon: '🌿',
+    farmer: 'Raju Shinde',
+    location: 'Nagpur',
+    quantity: 25,
+    date: '8 Sept 2026',
+    quality: 'Grade A',
+  },
+  {
+    id: 'potato-30',
+    crop: 'Potato',
+    icon: '🥔',
+    farmer: 'Ganesh More',
+    location: 'Pune',
+    quantity: 30,
+    date: '8 Sept 2026',
+    quality: 'Grade A',
+  },
+  {
+    id: 'maize-25',
+    crop: 'Maize',
+    icon: '🌽',
+    farmer: 'Sanjay Pawar',
+    location: 'Nashik',
+    quantity: 25,
+    date: '8 Sept 2026',
+    quality: 'Grade A',
+  },
+  {
+    id: 'gram-20',
+    crop: 'Gram',
+    icon: '🫘',
+    farmer: 'Dinesh Patil',
+    location: 'Ahilyanagar',
+    quantity: 20,
+    date: '8 Sept 2026',
     quality: 'Grade A',
   },
 ]
 
 /* -------------------------------------------------------------------------- */
 /* Buyers                                                                     */
-/* Buyer identity/details are prototype data.                                */
-/* Prices are NEVER stored here.                                             */
 /* -------------------------------------------------------------------------- */
 
 const buyers = [
@@ -122,208 +343,7 @@ const buyers = [
 ]
 
 /* -------------------------------------------------------------------------- */
-/* Helpers                                                                    */
-/* -------------------------------------------------------------------------- */
-
-const money = (value: number) =>
-  `₹${Math.round(value).toLocaleString('en-IN')}`
-
-const normalizeCropName = (value: string) =>
-  value
-    .toLowerCase()
-    .trim()
-    .replace(/[^a-z0-9]/g, '')
-
-/*
- * Government mandi data can use slightly different names.
- * These aliases only map names — they do NOT contain prices.
- */
-const CROP_ALIASES: Record<string, string[]> = {
-  Onion: ['onion'],
-  Tomato: ['tomato'],
-  Wheat: ['wheat'],
-  Soybean: ['soybean', 'soyabean', 'soyabeans'],
-  Cotton: ['cotton'],
-  Potato: ['potato'],
-  Maize: ['maize', 'corn'],
-  Gram: ['gram', 'bengalgram', 'chickpea', 'chana'],
-  Rice: ['rice', 'paddy'],
-  Bajra: ['bajra', 'pearlmillet'],
-  Jowar: ['jowar', 'sorghum'],
-  Groundnut: ['groundnut', 'peanut'],
-  Mustard: ['mustard'],
-  Tur: ['tur', 'arhar', 'redgram'],
-  Moong: ['moong', 'greengram'],
-  Urad: ['urad', 'blackgram'],
-}
-
-/* -------------------------------------------------------------------------- */
-/* Government Mandi API                                                       */
-/* -------------------------------------------------------------------------- */
-
-type MandiRecord = {
-  state?: string
-  district?: string
-  market?: string
-  commodity?: string
-  variety?: string
-  arrival_date?: string
-  min_price?: string
-  max_price?: string
-  modal_price?: string
-}
-
-type MandiApiResponse = {
-  records?: MandiRecord[]
-}
-
-/*
- * Finds the correct API commodity name for our crop.
- */
-function isSameCrop(
-  cropName: string,
-  apiCommodity: string,
-): boolean {
-  const normalizedCrop = normalizeCropName(cropName)
-  const normalizedCommodity = normalizeCropName(apiCommodity)
-
-  if (normalizedCrop === normalizedCommodity) {
-    return true
-  }
-
-  const aliases = CROP_ALIASES[cropName] ?? [cropName]
-
-  return aliases.some(
-    (alias) =>
-      normalizeCropName(alias) === normalizedCommodity,
-  )
-}
-
-/*
- * Fetches live mandi prices.
-
- * IMPORTANT:
- * There is NO hardcoded price fallback anywhere in this function.
- *
- * API success:
- *   crop -> actual API modal price
- *
- * API unavailable:
- *   crop -> undefined / null
- */
-function useMandiPrices() {
-  const [prices, setPrices] = useState<Record<string, number>>({})
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState(false)
-
-  useEffect(() => {
-    let cancelled = false
-
-    async function fetchPrices() {
-      try {
-        setLoading(true)
-        setError(false)
-
-        const response = await fetch(
-          '/api/mandi-prices?state=Maharashtra&limit=500',
-          {
-            cache: 'no-store',
-          },
-        )
-
-        if (!response.ok) {
-          throw new Error(
-            `Mandi API failed with status ${response.status}`,
-          )
-        }
-
-        const data: MandiApiResponse = await response.json()
-
-        if (cancelled) return
-
-        const records = data.records ?? []
-
-        const result: Record<string, number> = {}
-
-        /*
-         * Get crop names from:
-         * 1. marketplace listings
-         * 2. crops.ts
-         *
-         * This means the API pricing system is not restricted
-         * only to Onion/Tomato/Soybean.
-         */
-        const cropNames = Array.from(
-          new Set([
-            ...listings.map((listing) => listing.crop),
-            ...crops.map((crop) => crop.name),
-          ]),
-        )
-
-        cropNames.forEach((cropName) => {
-          const matchingRecords = records.filter(
-            (record) =>
-              record.commodity &&
-              isSameCrop(cropName, record.commodity),
-          )
-
-          const validModalPrices = matchingRecords
-            .map((record) => Number(record.modal_price))
-            .filter(
-              (price) =>
-                Number.isFinite(price) && price > 0,
-            )
-
-          /*
-           * Multiple mandi records may exist for the same crop.
-           *
-           * We calculate the average modal price from the
-           * actual government API records.
-           *
-           * No hardcoded number is involved.
-           */
-          if (validModalPrices.length > 0) {
-            const average =
-              validModalPrices.reduce(
-                (sum, price) => sum + price,
-                0,
-              ) / validModalPrices.length
-
-            result[cropName] = Math.round(average)
-          }
-        })
-
-        setPrices(result)
-      } catch (err) {
-        console.error('Failed to fetch mandi prices:', err)
-
-        if (!cancelled) {
-          setPrices({})
-          setError(true)
-        }
-      } finally {
-        if (!cancelled) {
-          setLoading(false)
-        }
-      }
-    }
-
-    fetchPrices()
-
-    return () => {
-      cancelled = true
-    }
-  }, [])
-
-  return {
-    prices,
-    loading,
-    error,
-  }
-}
-
-/* -------------------------------------------------------------------------- */
-/* UI Components                                                              */
+/* UI helpers                                                                 */
 /* -------------------------------------------------------------------------- */
 
 function Badge({
@@ -370,35 +390,43 @@ function Info({
 }
 
 /* -------------------------------------------------------------------------- */
-/* Offer Modal                                                                */
+/* Offer modal                                                                */
 /* -------------------------------------------------------------------------- */
 
 function OfferModal({
   listing,
+  price,
   close,
   submit,
 }: {
-  listing: ListingWithPrice
+  listing: Listing
+  price: number
   close: () => void
   submit: (offer: Offer) => void
 }) {
-  const [buyerName, setBuyerName] = useState('ABC Foods')
-  const [price, setPrice] = useState(listing.price ?? 0)
-  const [quantity, setQuantity] = useState(listing.quantity)
+  const [buyerName, setBuyerName] = useState(
+    buyers[0]?.name ?? '',
+  )
+
+  /*
+   * IMPORTANT:
+   * Initial offer price comes directly from API.
+   * No hardcoded price.
+   */
+  const [offerPrice, setOfferPrice] = useState(price)
+
+  const [quantity, setQuantity] = useState(
+    listing.quantity,
+  )
+
   const [message, setMessage] = useState(
     'Interested in purchasing the full quantity.',
   )
+
   const [error, setError] = useState('')
 
   const onSubmit = () => {
-    if (listing.price == null) {
-      setError(
-        'Live mandi price is currently unavailable for this crop.',
-      )
-      return
-    }
-
-    if (price <= 0) {
+    if (offerPrice <= 0) {
       setError(
         'Offer price must be greater than 0.',
       )
@@ -424,8 +452,8 @@ function OfferModal({
       buyer: buyerName,
       crop: listing.crop,
       quantity,
-      price,
-      expected: listing.price,
+      price: offerPrice,
+      expected: price,
       location: listing.location,
       status: 'Pending',
     })
@@ -440,7 +468,9 @@ function OfferModal({
       <div className="w-full max-w-lg rounded-t-3xl bg-card p-6 shadow-2xl sm:rounded-3xl">
         <div className="flex items-start justify-between">
           <div>
-            <Badge>Marketplace Offer</Badge>
+            <Badge tone="green">
+              Live Mandi Price
+            </Badge>
 
             <h2 className="mt-3 font-serif text-2xl font-bold">
               Make an offer
@@ -482,20 +512,8 @@ function OfferModal({
               Current mandi price
             </p>
 
-            <p className="mt-1 font-bold">
-              {listing.price != null
-                ? `${money(listing.price)}/q`
-                : '—'}
-            </p>
-          </div>
-
-          <div>
-            <p className="text-xs text-muted-foreground">
-              Price source
-            </p>
-
-            <p className="mt-1 font-bold">
-              Government API
+            <p className="mt-1 font-bold text-primary">
+              {money(price)}/q
             </p>
           </div>
         </div>
@@ -529,18 +547,13 @@ function OfferModal({
               className="mt-2 h-12 w-full rounded-xl border border-input bg-background px-3"
               type="number"
               min="1"
-              value={price}
+              value={offerPrice}
               onChange={(e) =>
-                setPrice(Number(e.target.value))
+                setOfferPrice(
+                  Number(e.target.value),
+                )
               }
             />
-
-            <span className="mt-1 block text-xs font-normal text-muted-foreground">
-              Current API mandi price:{" "}
-              {listing.price != null
-                ? `${money(listing.price)}/q`
-                : 'Unavailable'}
-            </span>
           </label>
 
           <label className="block text-sm font-semibold">
@@ -553,7 +566,9 @@ function OfferModal({
               max={listing.quantity}
               value={quantity}
               onChange={(e) =>
-                setQuantity(Number(e.target.value))
+                setQuantity(
+                  Number(e.target.value),
+                )
               }
             />
           </label>
@@ -578,8 +593,7 @@ function OfferModal({
 
           <button
             onClick={onSubmit}
-            disabled={listing.price == null}
-            className="min-h-12 w-full rounded-xl bg-primary px-5 font-bold text-primary-foreground disabled:cursor-not-allowed disabled:opacity-50"
+            className="min-h-12 w-full rounded-xl bg-primary px-5 font-bold text-primary-foreground"
           >
             Submit Offer
           </button>
@@ -590,15 +604,19 @@ function OfferModal({
 }
 
 /* -------------------------------------------------------------------------- */
-/* Listing Card                                                               */
+/* Listing card                                                               */
 /* -------------------------------------------------------------------------- */
 
 function ListingCard({
   listing,
+  price,
+  loading,
   open,
 }: {
-  listing: ListingWithPrice
-  open: (listing: ListingWithPrice) => void
+  listing: Listing
+  price: number | null
+  loading: boolean
+  open: (listing: Listing) => void
 }) {
   return (
     <article className="rounded-2xl border border-border bg-card p-5 shadow-sm">
@@ -617,17 +635,17 @@ function ListingCard({
           </p>
         </div>
 
-        <div className="flex flex-col items-end gap-1.5">
-          <Badge tone="green">
-            {listing.quality}
-          </Badge>
-
-          {listing.isLive && (
-            <Badge tone="amber">
-              Live Mandi Price
-            </Badge>
-          )}
-        </div>
+        <Badge
+          tone={
+            price != null
+              ? 'green'
+              : 'muted'
+          }
+        >
+          {price != null
+            ? 'Live Mandi Price'
+            : 'Price Unavailable'}
+        </Badge>
       </div>
 
       <div className="mt-5 grid grid-cols-2 gap-4 border-y border-border py-4 text-sm">
@@ -657,9 +675,11 @@ function ListingCard({
           </p>
 
           <p className="mt-1 font-bold text-primary">
-            {listing.price != null
-              ? `${money(listing.price)}/q`
-              : '—'}
+            {loading
+              ? 'Loading...'
+              : price != null
+                ? `${money(price)}/q`
+                : 'Not available'}
           </p>
         </div>
 
@@ -677,12 +697,10 @@ function ListingCard({
       <div className="mt-4 flex gap-3">
         <button
           onClick={() => open(listing)}
-          disabled={listing.price == null}
+          disabled={price == null}
           className="min-h-11 flex-1 rounded-xl bg-accent px-3 text-sm font-bold text-accent-foreground disabled:cursor-not-allowed disabled:opacity-50"
         >
-          {listing.price != null
-            ? 'Make Offer'
-            : 'Price Unavailable'}
+          Make Offer
         </button>
 
         <button
@@ -697,7 +715,7 @@ function ListingCard({
 }
 
 /* -------------------------------------------------------------------------- */
-/* Buyer Cards                                                                */
+/* Buyer cards                                                                */
 /* -------------------------------------------------------------------------- */
 
 function BuyerCards() {
@@ -705,11 +723,11 @@ function BuyerCards() {
     <section className="space-y-4">
       <div>
         <p className="text-sm font-semibold text-primary">
-          Marketplace buyers
+          Prototype buyers
         </p>
 
         <h2 className="mt-1 font-serif text-2xl font-bold">
-          Buyers on KrishiSetu
+          Trusted by transparency
         </h2>
       </div>
 
@@ -725,7 +743,7 @@ function BuyerCards() {
               </h3>
 
               <Badge>
-                Buyer
+                Prototype Buyer
               </Badge>
             </div>
 
@@ -757,7 +775,7 @@ function BuyerCards() {
 }
 
 /* -------------------------------------------------------------------------- */
-/* Buyer Marketplace                                                          */
+/* Buyer marketplace                                                          */
 /* -------------------------------------------------------------------------- */
 
 export function BuyerMarketplace({
@@ -785,9 +803,9 @@ export function BuyerMarketplace({
   const { t } = useLanguage()
 
   const {
-    prices: mandiPrices,
-    loading: mandiLoading,
+    loading,
     error: mandiError,
+    getCropPrice,
   } = useMandiPrices()
 
   const [cropFilter, setCropFilter] =
@@ -800,7 +818,7 @@ export function BuyerMarketplace({
     useState('')
 
   const [selected, setSelected] =
-    useState<ListingWithPrice | null>(null)
+    useState<Listing | null>(null)
 
   const [submitted, setSubmitted] =
     useState<Offer | null>(null)
@@ -809,44 +827,56 @@ export function BuyerMarketplace({
     useState(false)
 
   /*
-   * Attach ONLY API price to every listing.
+   * Every listing gets its price from the government API.
    *
-   * No hardcoded price.
+   * There is deliberately NO fallback such as:
+   *
+   * price: 2650
+   *
+   * If API doesn't have the price, price = null.
    */
-  const liveListings = useMemo<ListingWithPrice[]>(
-    () =>
-      listings.map((listing) => {
-        const price =
-          mandiPrices[listing.crop] ?? null
+  const liveListings = useMemo(() => {
+    return listings.map((listing) => ({
+      ...listing,
+      price: getCropPrice(listing.crop),
+    }))
+  }, [getCropPrice, loading])
 
-        return {
-          ...listing,
-          price,
-          isLive: price != null,
-        }
-      }),
-    [mandiPrices],
-  )
+  const filtered = useMemo(() => {
+    return liveListings.filter((item) => {
+      const cropMatches =
+        cropFilter === 'All crops' ||
+        item.crop === cropFilter
 
-  const filtered = useMemo(
-    () =>
-      liveListings.filter(
-        (item) =>
-          (cropFilter === 'All crops' ||
-            item.crop === cropFilter) &&
-          (locationFilter === 'All locations' ||
-            item.location === locationFilter) &&
-          (!minPrice ||
-            (item.price != null &&
-              item.price >= Number(minPrice))),
-      ),
-    [
-      liveListings,
-      cropFilter,
-      locationFilter,
-      minPrice,
-    ],
-  )
+      const locationMatches =
+        locationFilter === 'All locations' ||
+        item.location.includes(
+          locationFilter,
+        )
+
+      const priceMatches =
+        !minPrice ||
+        (item.price != null &&
+          item.price >=
+            Number(minPrice))
+
+      return (
+        cropMatches &&
+        locationMatches &&
+        priceMatches
+      )
+    })
+  }, [
+    liveListings,
+    cropFilter,
+    locationFilter,
+    minPrice,
+  ])
+
+  const selectedPrice =
+    selected != null
+      ? getCropPrice(selected.crop)
+      : null
 
   return (
     <div className="space-y-8">
@@ -886,45 +916,6 @@ export function BuyerMarketplace({
         />
       ) : (
         <>
-          {/* ---------------------------------------------------------------- */}
-          {/* API Status                                                       */}
-          {/* ---------------------------------------------------------------- */}
-
-          <section className="rounded-2xl border border-border bg-card p-4">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div>
-                <p className="text-sm font-bold">
-                  Mandi Price Source
-                </p>
-
-                <p className="mt-1 text-xs text-muted-foreground">
-                  Prices shown below are fetched from the
-                  government mandi API.
-                </p>
-              </div>
-
-              <div>
-                {mandiLoading ? (
-                  <Badge tone="amber">
-                    Loading prices...
-                  </Badge>
-                ) : mandiError ? (
-                  <Badge tone="red">
-                    API unavailable
-                  </Badge>
-                ) : (
-                  <Badge tone="green">
-                    Live API Data
-                  </Badge>
-                )}
-              </div>
-            </div>
-          </section>
-
-          {/* ---------------------------------------------------------------- */}
-          {/* Filters                                                          */}
-          {/* ---------------------------------------------------------------- */}
-
           <section className="rounded-2xl border border-border bg-card p-4 shadow-sm">
             <div className="grid gap-3 sm:grid-cols-3">
               <label className="text-xs font-bold text-muted-foreground">
@@ -933,7 +924,9 @@ export function BuyerMarketplace({
                 <select
                   value={cropFilter}
                   onChange={(e) =>
-                    setCropFilter(e.target.value)
+                    setCropFilter(
+                      e.target.value,
+                    )
                   }
                   className="mt-2 h-11 w-full rounded-xl border border-input bg-background px-3 text-sm text-foreground"
                 >
@@ -958,7 +951,9 @@ export function BuyerMarketplace({
                 <select
                   value={locationFilter}
                   onChange={(e) =>
-                    setLocationFilter(e.target.value)
+                    setLocationFilter(
+                      e.target.value,
+                    )
                   }
                   className="mt-2 h-11 w-full rounded-xl border border-input bg-background px-3 text-sm text-foreground"
                 >
@@ -966,14 +961,16 @@ export function BuyerMarketplace({
                     All locations
                   </option>
 
-                  {locations.map((location) => (
-                    <option
-                      key={location.id}
-                      value={location.name}
-                    >
-                      {location.name}
-                    </option>
-                  ))}
+                  {locations.map(
+                    (location) => (
+                      <option
+                        key={location.id}
+                        value={location.name}
+                      >
+                        {location.name}
+                      </option>
+                    ),
+                  )}
                 </select>
               </label>
 
@@ -983,7 +980,9 @@ export function BuyerMarketplace({
                 <input
                   value={minPrice}
                   onChange={(e) =>
-                    setMinPrice(e.target.value)
+                    setMinPrice(
+                      e.target.value,
+                    )
                   }
                   placeholder="₹ / quintal"
                   type="number"
@@ -993,9 +992,13 @@ export function BuyerMarketplace({
             </div>
           </section>
 
-          {/* ---------------------------------------------------------------- */}
-          {/* Submitted Offer                                                  */}
-          {/* ---------------------------------------------------------------- */}
+          {mandiError && (
+            <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm font-semibold text-red-700">
+              Unable to fetch live mandi prices.
+              Please check the government API
+              connection.
+            </div>
+          )}
 
           {submitted && (
             <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-5 text-emerald-900">
@@ -1009,8 +1012,12 @@ export function BuyerMarketplace({
 
                   <p className="mt-1 text-sm">
                     {submitted.buyer} ·{' '}
-                    {money(submitted.price)}/q ·{' '}
-                    {submitted.quantity} quintals
+                    {money(
+                      submitted.price,
+                    )}
+                    /q ·{' '}
+                    {submitted.quantity}{' '}
+                    quintals
                   </p>
 
                   <p className="mt-2 text-sm font-semibold">
@@ -1021,39 +1028,24 @@ export function BuyerMarketplace({
             </div>
           )}
 
-          {/* ---------------------------------------------------------------- */}
-          {/* Listings                                                         */}
-          {/* ---------------------------------------------------------------- */}
-
           <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
-            {mandiLoading
-              ? listings.map((listing) => (
-                  <article
-                    key={listing.id}
-                    className="rounded-2xl border border-border bg-card p-5 shadow-sm"
-                  >
-                    <div className="animate-pulse space-y-4">
-                      <div className="h-8 w-8 rounded bg-muted" />
-                      <div className="h-6 w-32 rounded bg-muted" />
-                      <div className="h-4 w-24 rounded bg-muted" />
-                      <div className="h-20 rounded bg-muted" />
-                    </div>
-                  </article>
-                ))
-              : filtered.map((listing) => (
-                  <ListingCard
-                    key={listing.id}
-                    listing={listing}
-                    open={setSelected}
-                  />
-                ))}
+            {filtered.map((listing) => (
+              <ListingCard
+                key={listing.id}
+                listing={listing}
+                price={listing.price}
+                loading={loading}
+                open={setSelected}
+              />
+            ))}
           </div>
 
-          {!mandiLoading &&
-            filtered.length === 0 && (
+          {filtered.length === 0 &&
+            !loading && (
               <p className="rounded-2xl border border-dashed border-border bg-card p-6 text-center text-sm text-muted-foreground">
-                No listings match this
-                crop/location combination.
+                No live mandi price is available
+                for this crop/location from
+                the API.
               </p>
             )}
 
@@ -1061,40 +1053,44 @@ export function BuyerMarketplace({
 
           <section className="rounded-2xl bg-muted p-5 text-sm text-muted-foreground">
             <p className="font-bold text-foreground">
-              Live mandi pricing
+              Live mandi prices
             </p>
 
             <p className="mt-1">
-              Crop prices are fetched from the government
-              mandi API. If the API does not provide a price
-              for a crop, KrishiSetu does not show a
-              hardcoded replacement price.
+              Prices shown above are fetched
+              from the connected government
+              mandi API. No fallback price is
+              used when live data is unavailable.
             </p>
           </section>
         </>
       )}
 
-      {selected && (
-        <OfferModal
-          listing={selected}
-          close={() => setSelected(null)}
-          submit={(offer) => {
-            setOffers((current) => [
-              ...current,
-              offer,
-            ])
+      {selected &&
+        selectedPrice != null && (
+          <OfferModal
+            listing={selected}
+            price={selectedPrice}
+            close={() =>
+              setSelected(null)
+            }
+            submit={(offer) => {
+              setOffers((current) => [
+                ...current,
+                offer,
+              ])
 
-            setSubmitted(offer)
-            setSelected(null)
-          }}
-        />
-      )}
+              setSubmitted(offer)
+              setSelected(null)
+            }}
+          />
+        )}
     </div>
   )
 }
 
 /* -------------------------------------------------------------------------- */
-/* Buyer Offer Status                                                         */
+/* Buyer's offer status                                                       */
 /* -------------------------------------------------------------------------- */
 
 function BuyerOfferStatusList({
@@ -1136,7 +1132,9 @@ function BuyerOfferStatusList({
       ),
     )
 
-  const rejectCounter = (offerId: string) =>
+  const rejectCounter = (
+    offerId: string,
+  ) =>
     setOffers((current) =>
       current.map((item) =>
         item.id === offerId
@@ -1151,7 +1149,8 @@ function BuyerOfferStatusList({
   if (offers.length === 0) {
     return (
       <p className="rounded-2xl border border-dashed border-border bg-card p-6 text-center text-sm text-muted-foreground">
-        You haven't submitted any offers yet.
+        You haven't submitted any offers
+        yet in this prototype session.
       </p>
     )
   }
@@ -1175,9 +1174,11 @@ function BuyerOfferStatusList({
 
               <Badge
                 tone={
-                  offer.status === 'Accepted'
+                  offer.status ===
+                  'Accepted'
                     ? 'green'
-                    : offer.status === 'Rejected'
+                    : offer.status ===
+                        'Rejected'
                       ? 'red'
                       : 'amber'
                 }
@@ -1196,7 +1197,7 @@ function BuyerOfferStatusList({
                 <p className="font-bold">
                   Farmer countered:{' '}
                   {money(
-                    offer.counterPrice as number,
+                    offer.counterPrice!,
                   )}
                   /q
                 </p>
@@ -1204,7 +1205,9 @@ function BuyerOfferStatusList({
                 <div className="flex gap-2">
                   <button
                     onClick={() =>
-                      acceptCounter(offer)
+                      acceptCounter(
+                        offer,
+                      )
                     }
                     className="min-h-9 flex-1 rounded-lg bg-primary px-3 text-xs font-bold text-primary-foreground"
                   >
@@ -1213,7 +1216,9 @@ function BuyerOfferStatusList({
 
                   <button
                     onClick={() =>
-                      rejectCounter(offer.id)
+                      rejectCounter(
+                        offer.id,
+                      )
                     }
                     className="min-h-9 flex-1 rounded-lg border border-destructive px-3 text-xs font-bold text-destructive"
                   >
@@ -1223,17 +1228,21 @@ function BuyerOfferStatusList({
               </div>
             )}
 
-            {offer.status === 'Accepted' &&
+            {offer.status ===
+              'Accepted' &&
               !offer.grade && (
                 <div className="mt-3 space-y-2 rounded-lg bg-emerald-50 p-3 text-xs text-emerald-900">
                   <p className="font-bold">
-                    Accepted — grade the produce and set
-                    the final price.
+                    Accepted — grade the
+                    produce and set the
+                    final price.
                   </p>
 
                   <button
                     onClick={() =>
-                      goToGrading(offer.id)
+                      goToGrading(
+                        offer.id,
+                      )
                     }
                     className="min-h-9 w-full rounded-lg bg-primary px-3 text-xs font-bold text-primary-foreground"
                   >
@@ -1242,13 +1251,18 @@ function BuyerOfferStatusList({
                 </div>
               )}
 
-            {offer.status === 'Accepted' &&
+            {offer.status ===
+              'Accepted' &&
               offer.grade && (
                 <div className="mt-3 space-y-2 rounded-lg bg-emerald-50 p-3 text-xs text-emerald-900">
                   <p className="font-bold">
                     Graded{' '}
-                    {gradeLabels[offer.grade]} · Final
-                    price{' '}
+                    {
+                      gradeLabels[
+                        offer.grade
+                      ]
+                    }{' '}
+                    · Final price{' '}
                     {money(
                       offer.finalPrice ??
                         offer.price,
@@ -1257,7 +1271,9 @@ function BuyerOfferStatusList({
                   </p>
 
                   <button
-                    onClick={goToLogistics}
+                    onClick={
+                      goToLogistics
+                    }
                     className="min-h-9 w-full rounded-lg bg-primary px-3 text-xs font-bold text-primary-foreground"
                   >
                     {t.planTransportBtn}
@@ -1265,11 +1281,13 @@ function BuyerOfferStatusList({
                 </div>
               )}
 
-            {offer.status === 'Rejected' && (
-              <p className="mt-3 text-xs font-semibold text-red-700">
-                This offer was rejected.
-              </p>
-            )}
+            {offer.status ===
+              'Rejected' && (
+                <p className="mt-3 text-xs font-semibold text-red-700">
+                  This offer was
+                  rejected.
+                </p>
+              )}
           </div>
         )
       })}
@@ -1278,7 +1296,7 @@ function BuyerOfferStatusList({
 }
 
 /* -------------------------------------------------------------------------- */
-/* Negotiate Modal                                                            */
+/* Negotiate modal                                                            */
 /* -------------------------------------------------------------------------- */
 
 function NegotiateModal({
@@ -1288,12 +1306,16 @@ function NegotiateModal({
 }: {
   offer: Offer
   close: () => void
-  sendCounter: (counterPrice: number) => void
+  sendCounter: (
+    counterPrice: number,
+  ) => void
 }) {
   const [counterPrice, setCounterPrice] =
     useState(
       Math.round(
-        (offer.price + offer.expected) / 2,
+        (offer.price +
+          offer.expected) /
+          2,
       ),
     )
 
@@ -1342,25 +1364,19 @@ function NegotiateModal({
         </div>
 
         <div className="mt-5 grid grid-cols-2 gap-4 rounded-2xl bg-muted p-4 text-sm">
-          <div>
-            <p className="text-xs text-muted-foreground">
-              Buyer offer
-            </p>
+          <Info
+            label="Buyer offer"
+            value={`${money(
+              offer.price,
+            )}/q`}
+          />
 
-            <p className="mt-1 font-bold">
-              {money(offer.price)}/q
-            </p>
-          </div>
-
-          <div>
-            <p className="text-xs text-muted-foreground">
-              Expected price
-            </p>
-
-            <p className="mt-1 font-bold">
-              {money(offer.expected)}/q
-            </p>
-          </div>
+          <Info
+            label="Expected price"
+            value={`${money(
+              offer.expected,
+            )}/q`}
+          />
         </div>
 
         <label className="mt-5 block text-sm font-semibold">
@@ -1397,7 +1413,7 @@ function NegotiateModal({
 }
 
 /* -------------------------------------------------------------------------- */
-/* Grading Screen                                                             */
+/* Grading screen                                                             */
 /* -------------------------------------------------------------------------- */
 
 export function GradingScreen({
@@ -1445,14 +1461,20 @@ export function GradingScreen({
   }
 
   const onSubmit = () => {
-    if (finalPrice <= 0) {
+    if (
+      !Number.isFinite(finalPrice) ||
+      finalPrice <= 0
+    ) {
       setError(
         'Final price must be greater than 0.',
       )
       return
     }
 
-    submit(grade, finalPrice)
+    submit(
+      grade,
+      finalPrice,
+    )
   }
 
   return (
@@ -1514,7 +1536,7 @@ export function GradingScreen({
               gradeLabels,
             ) as QualityGrade[]
           ).map((key) => {
-            const isSelected =
+            const selected =
               grade === key
 
             return (
@@ -1524,17 +1546,23 @@ export function GradingScreen({
                   setGrade(key)
                 }
                 className={`rounded-2xl border p-5 text-left transition ${
-                  isSelected
+                  selected
                     ? 'border-primary bg-primary/10 ring-2 ring-primary/20'
                     : 'border-border bg-card hover:border-primary/40'
                 }`}
               >
                 <h3 className="font-bold">
-                  {gradeLabels[key].label}
+                  {
+                    gradeLabels[key]
+                      .label
+                  }
                 </h3>
 
                 <p className="mt-2 text-sm text-muted-foreground">
-                  {gradeLabels[key].note}
+                  {
+                    gradeLabels[key]
+                      .note
+                  }
                 </p>
               </button>
             )
@@ -1585,7 +1613,7 @@ export function GradingScreen({
 }
 
 /* -------------------------------------------------------------------------- */
-/* Buyer Contact                                                              */
+/* Buyer contact                                                              */
 /* -------------------------------------------------------------------------- */
 
 type BuyerContact = {
@@ -1623,22 +1651,27 @@ const BUYER_CONTACTS: Record<
   },
 }
 
-const DEFAULT_BUYER_CONTACT: BuyerContact = {
-  phone: '+91 90000 00000',
-  email:
-    'contact@buyer.example',
-  address:
-    'Registered on KrishiSetu marketplace',
-}
+const DEFAULT_BUYER_CONTACT: BuyerContact =
+  {
+    phone: '+91 90000 00000',
+    email:
+      'contact@buyer.example',
+    address:
+      'Registered on KrishiSetu marketplace',
+  }
 
 function getBuyerContact(
   buyerName: string,
-): BuyerContact {
+) {
   return (
     BUYER_CONTACTS[buyerName] ??
     DEFAULT_BUYER_CONTACT
   )
 }
+
+/* -------------------------------------------------------------------------- */
+/* Contact buyer                                                              */
+/* -------------------------------------------------------------------------- */
 
 export function ContactBuyer({
   offer,
@@ -1652,7 +1685,7 @@ export function ContactBuyer({
   const contact =
     getBuyerContact(offer.buyer)
 
-  const finalPrice =
+  const agreedPrice =
     offer.finalPrice ??
     offer.price
 
@@ -1693,14 +1726,14 @@ export function ContactBuyer({
           <Info
             label="Agreed price"
             value={`${money(
-              finalPrice,
+              agreedPrice,
             )}/q`}
           />
 
           <Info
             label="Total value"
             value={money(
-              finalPrice *
+              agreedPrice *
                 offer.quantity,
             )}
           />
@@ -1715,7 +1748,6 @@ export function ContactBuyer({
         <div className="mt-4 space-y-4">
           <div className="flex items-center gap-3">
             <Phone className="size-5 text-primary" />
-
             <span className="font-bold">
               {contact.phone}
             </span>
@@ -1741,8 +1773,7 @@ export function ContactBuyer({
         </div>
 
         <p className="mt-5 rounded-xl bg-muted p-3 text-xs text-muted-foreground">
-          Prototype contact details — no real buyer is
-          reachable at this number.
+          Prototype contact details.
         </p>
       </section>
 
@@ -1757,7 +1788,7 @@ export function ContactBuyer({
 }
 
 /* -------------------------------------------------------------------------- */
-/* Farmer Offer Card                                                          */
+/* Farmer offer card                                                          */
 /* -------------------------------------------------------------------------- */
 
 function OfferCard({
@@ -1808,7 +1839,8 @@ function OfferCard({
           </h2>
 
           <p className="mt-1 text-sm text-muted-foreground">
-            Buyer · {offer.location}
+            Prototype Buyer ·{' '}
+            {offer.location}
           </p>
         </div>
 
@@ -1836,7 +1868,7 @@ function OfferCard({
         />
 
         <Info
-          label="Mandi reference"
+          label="Expected"
           value={`${money(
             offer.expected,
           )}/q`}
@@ -1845,9 +1877,7 @@ function OfferCard({
         <Info
           label="Difference"
           value={`${
-            diff >= 0
-              ? '+'
-              : '-'
+            diff >= 0 ? '+' : '-'
           }${money(
             Math.abs(diff),
           )}/q`}
@@ -1862,8 +1892,10 @@ function OfferCard({
         />
       </div>
 
-      {offer.counterPrice != null &&
-        offer.status === 'Pending' && (
+      {offer.counterPrice !=
+        null &&
+        offer.status ===
+          'Pending' && (
           <div className="mt-4 rounded-xl bg-amber-50 p-4 text-sm text-amber-900">
             <p className="font-bold">
               Counter-offer sent:{' '}
@@ -1880,7 +1912,8 @@ function OfferCard({
           </div>
         )}
 
-      {offer.status === 'Accepted' &&
+      {offer.status ===
+        'Accepted' &&
         !offer.grade && (
           <div className="mt-4 space-y-3 rounded-xl bg-emerald-50 p-4 text-sm text-emerald-900">
             <div>
@@ -1895,14 +1928,18 @@ function OfferCard({
 
             <div className="flex gap-2">
               <button
-                onClick={goToGrading}
+                onClick={
+                  goToGrading
+                }
                 className="min-h-11 flex-1 rounded-xl bg-primary px-4 text-sm font-bold text-primary-foreground"
               >
                 {t.gradeSetPriceBtn}
               </button>
 
               <button
-                onClick={goToContact}
+                onClick={
+                  goToContact
+                }
                 className="min-h-11 flex-1 rounded-xl border border-primary px-4 text-sm font-bold text-primary"
               >
                 Contact Buyer
@@ -1911,14 +1948,17 @@ function OfferCard({
           </div>
         )}
 
-      {offer.status === 'Accepted' &&
+      {offer.status ===
+        'Accepted' &&
         offer.grade && (
           <div className="mt-4 space-y-3 rounded-xl bg-emerald-50 p-4 text-sm text-emerald-900">
             <div className="flex items-center justify-between">
               <p className="font-bold">
-                {gradeLabels[
-                  offer.grade
-                ]}
+                {
+                  gradeLabels[
+                    offer.grade
+                  ]
+                }
               </p>
 
               <p className="font-bold">
@@ -1936,14 +1976,18 @@ function OfferCard({
 
             <div className="flex gap-2">
               <button
-                onClick={goToLogistics}
+                onClick={
+                  goToLogistics
+                }
                 className="min-h-11 flex-1 rounded-xl bg-primary px-4 text-sm font-bold text-primary-foreground"
               >
                 {t.planTransportBtn}
               </button>
 
               <button
-                onClick={goToContact}
+                onClick={
+                  goToContact
+                }
                 className="min-h-11 flex-1 rounded-xl border border-primary px-4 text-sm font-bold text-primary"
               >
                 Contact Buyer
@@ -1952,14 +1996,17 @@ function OfferCard({
           </div>
         )}
 
-      {offer.status === 'Rejected' && (
+      {offer.status ===
+        'Rejected' && (
         <p className="mt-4 text-sm font-semibold text-red-700">
-          Offer rejected. You can continue viewing
-          other offers.
+          Offer rejected. You can
+          continue viewing other
+          offers.
         </p>
       )}
 
-      {offer.status === 'Pending' && (
+      {offer.status ===
+        'Pending' && (
         <div className="mt-4 flex flex-wrap gap-3">
           <button
             onClick={accept}
@@ -1988,9 +2035,7 @@ function OfferCard({
 }
 
 /* -------------------------------------------------------------------------- */
-/* Farmer Offers                                                              */
-/* IMPORTANT: No demo/fake price offers anymore.                            */
-/* Only actual offers submitted through BuyerMarketplace are shown.         */
+/* Farmer offers                                                              */
 /* -------------------------------------------------------------------------- */
 
 export function FarmerOffers({
@@ -2021,28 +2066,103 @@ export function FarmerOffers({
 }) {
   const { t } = useLanguage()
 
-  const [
-    negotiatingId,
-    setNegotiatingId,
-  ] = useState<string | null>(
-    null,
-  )
-
   /*
    * IMPORTANT:
-   * No defaultOffers.
+   * Farmer offers also use the API price.
    *
-   * The farmer sees only offers that actually exist
-   * in the shared offers state.
+   * No 2700 / 2650 / 2750 hardcoded values.
    */
-  const shown = offers
+  const {
+    loading,
+    getCropPrice,
+  } = useMandiPrices()
+
+  const liveMarketPrice =
+    getCropPrice(context.crop)
+
+  const [negotiatingId, setNegotiatingId] =
+    useState<string | null>(null)
+
+  /*
+   * Demo buyer offers are calculated from the
+   * LIVE API price.
+   *
+   * The multipliers create different demo offers
+   * without hardcoding a rupee amount.
+   */
+  const defaultOffers = useMemo(() => {
+    if (liveMarketPrice == null) {
+      return []
+    }
+
+    return [
+      {
+        id: 'demo-abc-foods',
+        buyer: 'ABC Foods',
+        crop: context.crop,
+        quantity: context.quantity,
+        price: Math.round(
+          liveMarketPrice * 1.02,
+        ),
+        expected: liveMarketPrice,
+        location: context.location,
+        status:
+          'Pending' as OfferStatus,
+      },
+
+      {
+        id: 'demo-freshmart',
+        buyer: 'FreshMart',
+        crop: context.crop,
+        quantity: context.quantity,
+        price: Math.round(
+          liveMarketPrice * 0.99,
+        ),
+        expected: liveMarketPrice,
+        location: context.location,
+        status:
+          'Pending' as OfferStatus,
+      },
+
+      {
+        id: 'demo-agrotrade',
+        buyer: 'AgroTrade',
+        crop: context.crop,
+        quantity: Math.min(
+          15,
+          context.quantity,
+        ),
+        price: Math.round(
+          liveMarketPrice * 1.04,
+        ),
+        expected: liveMarketPrice,
+        location: context.location,
+        status:
+          'Pending' as OfferStatus,
+      },
+    ]
+  }, [
+    liveMarketPrice,
+    context.crop,
+    context.quantity,
+    context.location,
+  ])
+
+  const shown =
+    offers.length > 0
+      ? offers
+      : defaultOffers
 
   const update = (
     id: string,
     status: OfferStatus,
   ) => {
     setOffers((current) =>
-      current.map((item) =>
+      (
+        current.length
+          ? current
+          : defaultOffers
+      ).map((item) =>
         item.id === id
           ? {
               ...item,
@@ -2057,15 +2177,12 @@ export function FarmerOffers({
     id: string,
     counterPrice: number,
   ) => {
-    if (
-      !Number.isFinite(counterPrice) ||
-      counterPrice <= 0
-    ) {
-      return
-    }
-
     setOffers((current) =>
-      current.map((item) =>
+      (
+        current.length
+          ? current
+          : defaultOffers
+      ).map((item) =>
         item.id === id
           ? {
               ...item,
@@ -2079,7 +2196,8 @@ export function FarmerOffers({
   const negotiatingOffer =
     shown.find(
       (offer) =>
-        offer.id === negotiatingId,
+        offer.id ===
+        negotiatingId,
     )
 
   return (
@@ -2107,10 +2225,6 @@ export function FarmerOffers({
         </button>
       </div>
 
-      {/* ------------------------------------------------------------------ */}
-      {/* Current Context                                                    */}
-      {/* ------------------------------------------------------------------ */}
-
       <section className="rounded-2xl border border-border bg-card p-5 shadow-sm">
         <p className="text-sm font-bold">
           {t.currentContextTitle}
@@ -2133,95 +2247,147 @@ export function FarmerOffers({
           />
 
           <Info
-            label="Market price"
+            label="Live market price"
             value={
-              Number.isFinite(
-                context.marketPrice,
-              ) &&
-              context.marketPrice > 0
-                ? `${money(
-                    context.marketPrice,
-                  )}/q`
-                : '—'
+              loading
+                ? 'Loading...'
+                : liveMarketPrice !=
+                    null
+                  ? `${money(
+                      liveMarketPrice,
+                    )}/q`
+                  : 'Not available'
             }
           />
 
           <Info
             label="Expected net return"
             value={
-              Number.isFinite(
-                context.netReturn,
-              )
+              liveMarketPrice !=
+              null
                 ? money(
-                    context.netReturn,
+                    liveMarketPrice *
+                      context.quantity,
                   )
-                : '—'
+                : 'Not available'
             }
           />
         </div>
       </section>
 
-      {/* ------------------------------------------------------------------ */}
-      {/* Offers                                                              */}
-      {/* ------------------------------------------------------------------ */}
+      {liveMarketPrice == null &&
+        !loading && (
+          <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm font-semibold text-red-700">
+            Live mandi price for{' '}
+            {context.crop} is not
+            available from the government
+            API. No hardcoded price is being
+            used.
+          </div>
+        )}
 
-      {shown.length === 0 ? (
-        <section className="rounded-2xl border border-dashed border-border bg-card p-8 text-center">
+      <div className="grid gap-5 lg:grid-cols-2">
+        {shown.map((offer) => (
+          <OfferCard
+            key={offer.id}
+            offer={offer}
+            accept={() =>
+              update(
+                offer.id,
+                'Accepted',
+              )
+            }
+            reject={() =>
+              update(
+                offer.id,
+                'Rejected',
+              )
+            }
+            openNegotiate={() =>
+              setNegotiatingId(
+                offer.id,
+              )
+            }
+            goToLogistics={
+              goToLogistics
+            }
+            goToGrading={() =>
+              goToGrading(
+                offer.id,
+              )
+            }
+            goToContact={() =>
+              goToContact(
+                offer.id,
+              )
+            }
+          />
+        ))}
+      </div>
+
+      {shown.length === 0 &&
+        !loading && (
+          <p className="rounded-2xl border border-dashed border-border bg-card p-6 text-center text-sm text-muted-foreground">
+            No live mandi price is
+            available for this crop.
+          </p>
+        )}
+
+      {shown.length > 0 && (
+        <section className="rounded-2xl border border-border bg-card p-5">
           <h2 className="font-serif text-xl font-bold">
-            No buyer offers yet
+            {t.offerComparisonTitle}
           </h2>
 
-          <p className="mt-2 text-sm text-muted-foreground">
-            Offers submitted from the marketplace will
-            appear here.
-          </p>
+          <div className="mt-4 grid gap-3 sm:grid-cols-3">
+            {shown.map(
+              (item, index) => (
+                <div
+                  key={item.id}
+                  className={`rounded-xl p-4 ${
+                    index === 0
+                      ? 'bg-accent/20 ring-1 ring-accent'
+                      : 'bg-muted'
+                  }`}
+                >
+                  <div className="flex justify-between gap-2">
+                    <p className="font-bold">
+                      {item.buyer}
+                    </p>
 
-          <button
-            onClick={openMarketplace}
-            className="mt-5 min-h-11 rounded-xl bg-primary px-5 text-sm font-bold text-primary-foreground"
-          >
-            {t.findMoreBuyers}
-          </button>
+                    {index === 0 && (
+                      <Badge>
+                        Best offer
+                      </Badge>
+                    )}
+                  </div>
+
+                  <p className="mt-3 font-serif text-xl font-bold text-primary">
+                    {money(
+                      item.price,
+                    )}
+                    /q
+                  </p>
+
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    {item.quantity} q ·{' '}
+                    {money(
+                      item.price *
+                        item.quantity,
+                    )}{' '}
+                    total
+                  </p>
+                </div>
+              ),
+            )}
+          </div>
+
+          <p className="mt-4 text-xs text-muted-foreground">
+            Offer prices are calculated from
+            the current live mandi price
+            returned by the API.
+          </p>
         </section>
-      ) : (
-        <div className="grid gap-5 lg:grid-cols-2">
-          {shown.map((offer) => (
-            <OfferCard
-              key={offer.id}
-              offer={offer}
-              accept={() =>
-                update(
-                  offer.id,
-                  'Accepted',
-                )
-              }
-              reject={() =>
-                update(
-                  offer.id,
-                  'Rejected',
-                )
-              }
-              openNegotiate={() =>
-                setNegotiatingId(
-                  offer.id,
-                )
-              }
-              goToLogistics={
-                goToLogistics
-              }
-              goToGrading={() =>
-                goToGrading(
-                  offer.id,
-                )
-              }
-              goToContact={() =>
-                goToContact(
-                  offer.id,
-                )
-              }
-            />
-          ))}
-        </div>
       )}
 
       {negotiatingOffer && (
@@ -2230,7 +2396,9 @@ export function FarmerOffers({
           close={() =>
             setNegotiatingId(null)
           }
-          sendCounter={(counterPrice) => {
+          sendCounter={(
+            counterPrice,
+          ) => {
             sendCounter(
               negotiatingOffer.id,
               counterPrice,
@@ -2245,7 +2413,7 @@ export function FarmerOffers({
 }
 
 /* -------------------------------------------------------------------------- */
-/* Shared Offers Hook                                                         */
+/* Shared offers state                                                        */
 /* -------------------------------------------------------------------------- */
 
 export function useMarketplaceOffers() {
@@ -2253,7 +2421,7 @@ export function useMarketplaceOffers() {
 }
 
 /* -------------------------------------------------------------------------- */
-/* Exports                                                                    */
+/* Export listings                                                            */
 /* -------------------------------------------------------------------------- */
 
 export { listings }
