@@ -30,7 +30,13 @@ type Props = {
   otherCosts: number
   existingTransportCost: number
   onBack: () => void
-  onTransportSelected?: (cost: number) => void
+  onConfirmTransport: (payload: {
+    vehicleName: string
+    totalCost: number
+    pickupDate: string
+    pickupTime: string
+    driverContact: string
+  }) => void
 }
 
 export function Logistics({
@@ -44,12 +50,11 @@ export function Logistics({
   otherCosts,
   existingTransportCost,
   onBack,
-  onTransportSelected,
+  onConfirmTransport,
 }: Props) {
   const { t } = useLanguage()
 
   const [selectedId, setSelectedId] = useState<string | null>(null)
-  const [pickupScheduled, setPickupScheduled] = useState(false)
   const [pickupDate, setPickupDate] = useState("")
   const [pickupTime, setPickupTime] = useState("")
   const [driverContact, setDriverContact] = useState("")
@@ -82,8 +87,20 @@ export function Logistics({
 
   function selectTransport(option: LogisticsOption) {
     setSelectedId(option.id)
-    setPickupScheduled(false)
-    onTransportSelected?.(option.totalCost)
+  }
+
+  function confirmTransport() {
+    if (!selected || !canSchedule) {
+      return
+    }
+
+    onConfirmTransport({
+      vehicleName: selected.name,
+      totalCost: selected.totalCost,
+      pickupDate,
+      pickupTime,
+      driverContact,
+    })
   }
 
   return (
@@ -338,45 +355,13 @@ export function Logistics({
 
             <button
               disabled={!canSchedule}
-              onClick={() => setPickupScheduled(true)}
+              onClick={confirmTransport}
               className="mt-5 flex min-h-12 items-center gap-2 rounded-xl bg-accent px-5 font-bold text-accent-foreground disabled:cursor-not-allowed disabled:opacity-50"
             >
               <Clock3 className="size-4" />
-              {t.schedulePickupBtn}
+              Confirm Transport &amp; Pickup
             </button>
           </section>
-
-          {/* Scheduled state */}
-          {pickupScheduled && (
-            <section className="rounded-2xl border-2 border-primary/20 bg-primary/5 p-5">
-              <div className="flex items-start gap-3">
-                <CheckCircle2 className="mt-0.5 size-6 text-primary" />
-
-                <div>
-                  <p className="font-bold text-primary">
-                    Pickup Scheduled
-                  </p>
-
-                  <p className="mt-1 text-sm">
-                    {selected.name} · {quantityInQuintals} quintals
-                  </p>
-
-                  <p className="mt-1 text-sm text-muted-foreground">
-                    {farmLocation} → {marketName} · {pickupDate} at {pickupTime}
-                  </p>
-
-                  <p className="mt-1 text-sm text-muted-foreground">
-                    Driver contact: {driverContact}
-                  </p>
-
-                  <p className="mt-3 text-xs font-semibold text-muted-foreground">
-                    Prototype Simulation — no real vehicle has
-                    been booked.
-                  </p>
-                </div>
-              </div>
-            </section>
-          )}
         </>
       )}
     </div>

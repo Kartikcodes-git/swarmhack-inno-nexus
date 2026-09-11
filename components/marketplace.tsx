@@ -1,7 +1,7 @@
 'use client'
 
 import { useMemo, useState } from 'react'
-import { Check, MapPin, X } from 'lucide-react'
+import { Check, MapPin, Phone, X } from 'lucide-react'
 import { useLanguage } from '@/lib/language'
 import { crops } from '@/lib/crops'
 import { locations } from '@/lib/locations'
@@ -975,6 +975,137 @@ export function GradingScreen({
 }
 
 /* -------------------------------------------------------------------------- */
+/* Buyer contact                                                             */
+/* -------------------------------------------------------------------------- */
+
+type BuyerContact = {
+  phone: string
+  email: string
+  address: string
+}
+
+const BUYER_CONTACTS: Record<string, BuyerContact> = {
+  'ABC Foods': {
+    phone: '+91 98200 11223',
+    email: 'procurement@abcfoods.example',
+    address: 'Plot 14, MIDC, Nashik, Maharashtra',
+  },
+  FreshMart: {
+    phone: '+91 90210 44556',
+    email: 'buying@freshmart.example',
+    address: 'Warehouse 7, Market Yard, Pune, Maharashtra',
+  },
+  AgroTrade: {
+    phone: '+91 87650 99887',
+    email: 'sourcing@agrotrade.example',
+    address: 'Gate 2, APMC Complex, Sambhajinagar, Maharashtra',
+  },
+}
+
+const DEFAULT_BUYER_CONTACT: BuyerContact = {
+  phone: '+91 90000 00000',
+  email: 'contact@buyer.example',
+  address: 'Registered on KrishiSetu marketplace',
+}
+
+function getBuyerContact(buyerName: string): BuyerContact {
+  return BUYER_CONTACTS[buyerName] ?? DEFAULT_BUYER_CONTACT
+}
+
+export function ContactBuyer({
+  offer,
+  back,
+  goToLogistics,
+}: {
+  offer: Offer
+  back: () => void
+  goToLogistics: () => void
+}) {
+  const contact = getBuyerContact(offer.buyer)
+
+  return (
+    <div className="space-y-7">
+      <div className="flex items-center gap-3">
+        <button
+          onClick={back}
+          className="rounded-xl border border-border p-2"
+          aria-label="Back"
+        >
+          <X className="size-5" />
+        </button>
+
+        <div>
+          <p className="text-sm font-semibold text-primary">
+            Buyer contact
+          </p>
+
+          <h1 className="font-serif text-3xl font-bold">
+            {offer.buyer}
+          </h1>
+        </div>
+      </div>
+
+      <section className="rounded-2xl border border-border bg-card p-5">
+        <div className="grid grid-cols-2 gap-4 text-sm sm:grid-cols-4">
+          <Info label="Crop" value={offer.crop} />
+          <Info
+            label="Quantity"
+            value={`${offer.quantity} quintals`}
+          />
+          <Info
+            label="Agreed price"
+            value={`${money(offer.finalPrice ?? offer.price)}/q`}
+          />
+          <Info
+            label="Total value"
+            value={money(
+              (offer.finalPrice ?? offer.price) * offer.quantity,
+            )}
+          />
+        </div>
+      </section>
+
+      <section className="rounded-2xl border border-border bg-card p-5">
+        <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
+          Contact details
+        </p>
+
+        <div className="mt-4 space-y-4">
+          <div className="flex items-center gap-3">
+            <Phone className="size-5 text-primary" />
+            <span className="font-bold">{contact.phone}</span>
+          </div>
+
+          <div className="flex items-center gap-3">
+            <span className="flex size-5 items-center justify-center text-primary">
+              @
+            </span>
+            <span>{contact.email}</span>
+          </div>
+
+          <div className="flex items-center gap-3">
+            <MapPin className="size-5 text-primary" />
+            <span>{contact.address}</span>
+          </div>
+        </div>
+
+        <p className="mt-5 rounded-xl bg-muted p-3 text-xs text-muted-foreground">
+          Prototype contact details — no real buyer is reachable at
+          this number.
+        </p>
+      </section>
+
+      <button
+        onClick={goToLogistics}
+        className="min-h-12 w-full rounded-xl bg-primary px-5 font-bold text-primary-foreground sm:w-auto"
+      >
+        Plan Transport
+      </button>
+    </div>
+  )
+}
+
+/* -------------------------------------------------------------------------- */
 /* Offer card                                                                */
 /* -------------------------------------------------------------------------- */
 
@@ -985,6 +1116,7 @@ function OfferCard({
   openNegotiate,
   goToLogistics,
   goToGrading,
+  goToContact,
 }: {
   offer: Offer
   accept: () => void
@@ -992,6 +1124,7 @@ function OfferCard({
   openNegotiate: () => void
   goToLogistics: () => void
   goToGrading: () => void
+  goToContact: () => void
 }) {
   const { t } = useLanguage()
 
@@ -1071,12 +1204,21 @@ function OfferCard({
             </p>
           </div>
 
-          <button
-            onClick={goToGrading}
-            className="min-h-11 w-full rounded-xl bg-primary px-4 text-sm font-bold text-primary-foreground"
-          >
-            {t.gradeSetPriceBtn}
-          </button>
+          <div className="flex gap-2">
+            <button
+              onClick={goToGrading}
+              className="min-h-11 flex-1 rounded-xl bg-primary px-4 text-sm font-bold text-primary-foreground"
+            >
+              {t.gradeSetPriceBtn}
+            </button>
+
+            <button
+              onClick={goToContact}
+              className="min-h-11 flex-1 rounded-xl border border-primary px-4 text-sm font-bold text-primary"
+            >
+              Contact Buyer
+            </button>
+          </div>
         </div>
       )}
 
@@ -1096,12 +1238,21 @@ function OfferCard({
             {t.gradedByBuyerNote}
           </p>
 
-          <button
-            onClick={goToLogistics}
-            className="min-h-11 w-full rounded-xl bg-primary px-4 text-sm font-bold text-primary-foreground"
-          >
-            {t.planTransportBtn}
-          </button>
+          <div className="flex gap-2">
+            <button
+              onClick={goToLogistics}
+              className="min-h-11 flex-1 rounded-xl bg-primary px-4 text-sm font-bold text-primary-foreground"
+            >
+              {t.planTransportBtn}
+            </button>
+
+            <button
+              onClick={goToContact}
+              className="min-h-11 flex-1 rounded-xl border border-primary px-4 text-sm font-bold text-primary"
+            >
+              Contact Buyer
+            </button>
+          </div>
         </div>
       )}
 
@@ -1150,6 +1301,7 @@ export function FarmerOffers({
   context,
   goToLogistics,
   goToGrading,
+  goToContact,
 }: {
   offers: Offer[]
   setOffers: React.Dispatch<React.SetStateAction<Offer[]>>
@@ -1164,44 +1316,69 @@ export function FarmerOffers({
   }
   goToLogistics: () => void
   goToGrading: (offerId: string) => void
+  goToContact: (offerId: string) => void
 }) {
   const { t } = useLanguage()
 
-  const defaultOffer: Offer = {
-    id: 'demo-offer',
-    buyer: 'ABC Foods',
-    crop: context.crop,
-    quantity: context.quantity,
-    price: 2700,
-    expected: context.marketPrice,
-    location: context.location,
-    status: 'Pending',
-  }
+  // Demo buyers shown until real offers come in from BuyerMarketplace.
+  // Each gets its own OfferCard (accept/negotiate/reject) — not just a
+  // read-only comparison row — so any of the three can be acted on.
+  const defaultOffers: Offer[] = [
+    {
+      id: 'demo-abc-foods',
+      buyer: 'ABC Foods',
+      crop: context.crop,
+      quantity: context.quantity,
+      price: 2700,
+      expected: context.marketPrice,
+      location: context.location,
+      status: 'Pending',
+    },
+    {
+      id: 'demo-freshmart',
+      buyer: 'FreshMart',
+      crop: context.crop,
+      quantity: context.quantity,
+      price: 2650,
+      expected: context.marketPrice,
+      location: context.location,
+      status: 'Pending',
+    },
+    {
+      id: 'demo-agrotrade',
+      buyer: 'AgroTrade',
+      crop: context.crop,
+      quantity: 15,
+      price: 2750,
+      expected: context.marketPrice,
+      location: context.location,
+      status: 'Pending',
+    },
+  ]
 
   // Buyer-submitted offers (from BuyerMarketplace) and the demo
   // fallback both render through the exact same OfferCard.
-  const shown = offers.length ? offers : [defaultOffer]
+  const shown = offers.length ? offers : defaultOffers
 
   const [negotiatingId, setNegotiatingId] = useState<string | null>(
     null,
   )
 
+  // Seed the FULL demo set on first action, not just the one offer
+  // acted on — otherwise accepting/negotiating one demo buyer would
+  // wipe the other two off the screen.
   const update = (id: string, status: OfferStatus) =>
     setOffers((current) =>
-      current.length
-        ? current.map((item) =>
-            item.id === id ? { ...item, status } : item,
-          )
-        : [{ ...defaultOffer, id, status }],
+      (current.length ? current : defaultOffers).map((item) =>
+        item.id === id ? { ...item, status } : item,
+      ),
     )
 
   const sendCounter = (id: string, counterPrice: number) =>
     setOffers((current) =>
-      current.length
-        ? current.map((item) =>
-            item.id === id ? { ...item, counterPrice } : item,
-          )
-        : [{ ...defaultOffer, id, counterPrice }],
+      (current.length ? current : defaultOffers).map((item) =>
+        item.id === id ? { ...item, counterPrice } : item,
+      ),
     )
 
   const negotiatingOffer = shown.find(
@@ -1264,6 +1441,7 @@ export function FarmerOffers({
             openNegotiate={() => setNegotiatingId(offer.id)}
             goToLogistics={goToLogistics}
             goToGrading={() => goToGrading(offer.id)}
+            goToContact={() => goToContact(offer.id)}
           />
         ))}
       </div>

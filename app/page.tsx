@@ -3,6 +3,7 @@
 import { useMemo, useState } from 'react'
 import {
   BarChart3,
+  CheckCircle2,
   ChevronRight,
   CircleHelp,
   Home,
@@ -50,6 +51,7 @@ import { useLanguage, type Labels, type Language } from '@/lib/language'
 
 import {
   BuyerMarketplace,
+  ContactBuyer,
   FarmerOffers,
   GradingScreen,
   type MarketplaceView,
@@ -70,7 +72,9 @@ type View =
   | 'trends'
   | 'forecast'
   | 'logistics'
+  | 'transport-confirmed'
   | 'grading'
+  | 'contact'
   | MarketplaceView
 
 const money = (value: number) =>
@@ -175,23 +179,25 @@ function Sidebar({
   t: Labels
   role: 'farmer' | 'buyer'
 }) {
-  const allLinks: Array<[string, View, typeof Home]> = [
+  // Farmer nav never shows Buyer Marketplace — that screen is
+  // buyer-facing. Farmers reach buyer offers via "Buyer Offers".
+  const farmerLinks: Array<[string, View, typeof Home]> = [
     [t.dashboard, 'dashboard', Home],
     [t.markets, 'comparison', BarChart3],
     [t.recommendation, 'recommendation', TrendingUp],
     [t.logisticsTag, 'logistics', Truck],
     [t.trends, 'trends', TrendingUp],
-    [t.buyerMarketplaceTag, 'marketplace', Users],
     [t.offers, 'offers', Package],
   ]
 
   // Buyer role only gets the marketplace in nav — buyer's own
   // submitted offers live inside that screen ("My Offers" button),
   // not as a separate nav item.
-  const links =
-    role === 'buyer'
-      ? allLinks.filter(([, target]) => target === 'marketplace')
-      : allLinks
+  const buyerLinks: Array<[string, View, typeof Home]> = [
+    [t.buyerMarketplaceTag, 'marketplace', Users],
+  ]
+
+  const links = role === 'buyer' ? buyerLinks : farmerLinks
 
   return (
     <aside className="hidden w-64 shrink-0 border-r border-border bg-card px-5 py-7 lg:block">
@@ -1076,6 +1082,90 @@ function EmptyState({ back }: { back: () => void }) {
         className="mt-6 min-h-11 rounded-xl bg-primary px-5 text-sm font-bold text-primary-foreground"
       >
         Try Again
+      </button>
+    </div>
+  )
+}
+
+function TransportConfirmed({
+  cropName,
+  quantity,
+  marketName,
+  farmLocation,
+  grossRevenue,
+  otherCosts,
+  vehicleName,
+  totalCost,
+  pickupDate,
+  pickupTime,
+  driverContact,
+  done,
+}: {
+  cropName: string
+  quantity: number
+  marketName: string
+  farmLocation: string
+  grossRevenue: number
+  otherCosts: number
+  vehicleName: string
+  totalCost: number
+  pickupDate: string
+  pickupTime: string
+  driverContact: string
+  done: () => void
+}) {
+  const netReturn = grossRevenue - totalCost - otherCosts
+
+  return (
+    <div className="space-y-7">
+      <div className="rounded-3xl bg-primary p-8 text-center text-primary-foreground">
+        <CheckCircle2 className="mx-auto size-10" />
+
+        <h1 className="mt-4 font-serif text-3xl font-bold">
+          Transport Confirmed
+        </h1>
+
+        <p className="mt-2 text-primary-foreground/80">
+          {vehicleName} booked for {cropName} · {quantity} quintals
+        </p>
+      </div>
+
+      <section className="rounded-2xl border border-border bg-card p-5">
+        <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
+          Trip details
+        </p>
+
+        <div className="mt-4 grid gap-4 text-sm sm:grid-cols-2">
+          <Info label="Route" value={`${farmLocation} → ${marketName}`} />
+          <Info label="Vehicle" value={vehicleName} />
+          <Info label="Pickup date" value={pickupDate} />
+          <Info label="Pickup time" value={pickupTime} />
+          <Info label="Driver contact" value={driverContact} />
+          <Info label="Transport cost" value={money(totalCost)} />
+        </div>
+      </section>
+
+      <section className="rounded-2xl border border-border bg-card p-5">
+        <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
+          Updated return
+        </p>
+
+        <div className="mt-4 grid gap-4 sm:grid-cols-3">
+          <Info label="Gross revenue" value={money(grossRevenue)} />
+          <Info label="Transport + other costs" value={money(totalCost + otherCosts)} />
+          <Info label="Net return" value={money(netReturn)} />
+        </div>
+      </section>
+
+      <p className="rounded-xl bg-muted p-3 text-xs text-muted-foreground">
+        Prototype simulation — no real vehicle has been booked.
+      </p>
+
+      <button
+        onClick={done}
+        className="min-h-12 rounded-xl bg-primary px-6 font-bold text-primary-foreground"
+      >
+        Done
       </button>
     </div>
   )
@@ -2318,6 +2408,18 @@ export default function Page() {
   const [gradingOfferId, setGradingOfferId] =
     useState<string | null>(null)
 
+  const [contactOfferId, setContactOfferId] =
+    useState<string | null>(null)
+
+  const [transportConfirmation, setTransportConfirmation] =
+    useState<{
+      vehicleName: string
+      totalCost: number
+      pickupDate: string
+      pickupTime: string
+      driverContact: string
+    } | null>(null)
+
   const { language, setLanguage, t } = useLanguage()
 
   const quantityInQuintals =
@@ -2357,6 +2459,8 @@ export default function Page() {
     setOffline(false)
     setTransportCost(null)
     setGradingOfferId(null)
+    setContactOfferId(null)
+    setTransportConfirmation(null)
   }
 
   const goToGrading = (offerId: string) => {
@@ -2366,6 +2470,15 @@ export default function Page() {
 
   const gradingOffer = offers.find(
     (offer) => offer.id === gradingOfferId,
+  )
+
+  const goToContact = (offerId: string) => {
+    setContactOfferId(offerId)
+    setView('contact')
+  }
+
+  const contactOffer = offers.find(
+    (offer) => offer.id === contactOfferId,
   )
 
   const submitGrading = (grade: QualityGrade, finalPrice: number) => {
@@ -2483,7 +2596,6 @@ export default function Page() {
                     [t.recommendation, 'recommendation'],
                     [t.logisticsTag, 'logistics'],
                     [t.trends, 'trends'],
-                    [t.buyerMarketplaceTag, 'marketplace'],
                     [t.offers, 'offers'],
                   ]
               ).map(([label, target]) => (
@@ -2615,9 +2727,10 @@ export default function Page() {
                 onBack={() =>
                   setView('dashboard')
                 }
-                onTransportSelected={(cost) => {
-                  setTransportCost(cost)
-                  setView('recommendation')
+                onConfirmTransport={(payload) => {
+                  setTransportCost(payload.totalCost)
+                  setTransportConfirmation(payload)
+                  setView('transport-confirmed')
                 }}
               />
             ) : (
@@ -2625,6 +2738,28 @@ export default function Page() {
                 back={() => setView('dashboard')}
               />
             ))}
+
+          {view === 'transport-confirmed' &&
+            activeMarket &&
+            transportConfirmation && (
+              <TransportConfirmed
+                cropName={crop.name}
+                quantity={quantityInQuintals}
+                marketName={activeMarket.market.name}
+                farmLocation={getLocationLabel(locationId)}
+                grossRevenue={activeMarket.revenue.grossRevenue}
+                otherCosts={
+                  activeMarket.revenue.handlingCost +
+                  activeMarket.revenue.otherCosts
+                }
+                vehicleName={transportConfirmation.vehicleName}
+                totalCost={transportConfirmation.totalCost}
+                pickupDate={transportConfirmation.pickupDate}
+                pickupTime={transportConfirmation.pickupTime}
+                driverContact={transportConfirmation.driverContact}
+                done={() => setView('dashboard')}
+              />
+            )}
 
           {view === 'trends' && (
             <Trends
@@ -2668,8 +2803,22 @@ export default function Page() {
                 setView('logistics')
               }
               goToGrading={goToGrading}
+              goToContact={goToContact}
             />
           )}
+
+          {view === 'contact' &&
+            (contactOffer ? (
+              <ContactBuyer
+                offer={contactOffer}
+                back={() => setView('offers')}
+                goToLogistics={() => setView('logistics')}
+              />
+            ) : (
+              <EmptyState
+                back={() => setView('offers')}
+              />
+            ))}
 
           {view === 'grading' &&
             (gradingOffer ? (
