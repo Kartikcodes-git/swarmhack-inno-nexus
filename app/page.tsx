@@ -406,14 +406,15 @@ function Login({
     }
 
     if (!farmerId) {
-      setError('Please upload your Digital Farmer ID (Kisan Pehchan Patra)')
+      setError(
+        'Please upload your Digital Farmer ID (Kisan Pehchan Patra)',
+      )
       return
     }
 
     setError('')
 
-    // Prototype only: OTP simulated locally, shown on screen.
-    // Real deployment wires this to an SMS/OTP provider.
+    // Demo OTP
     const generated = String(
       Math.floor(1000 + Math.random() * 9000),
     )
@@ -428,6 +429,7 @@ function Login({
       return
     }
 
+    setError('')
     onVerified(phone)
   }
 
@@ -456,7 +458,8 @@ function Login({
               {/* Mobile Number */}
               <label className="mt-6 block space-y-2">
                 <span className="text-sm font-semibold">
-                  Mobile number <span className="text-destructive">*</span>
+                  Mobile number{' '}
+                  <span className="text-destructive">*</span>
                 </span>
 
                 <div className="relative">
@@ -469,7 +472,9 @@ function Login({
                     value={phone}
                     onChange={(e) =>
                       setPhone(
-                        e.target.value.replace(/\D/g, '').slice(0, 10),
+                        e.target.value
+                          .replace(/\D/g, '')
+                          .slice(0, 10),
                       )
                     }
                     placeholder="10-digit mobile number"
@@ -478,10 +483,11 @@ function Login({
                 </div>
               </label>
 
-              {/* Digital Farmer ID - Required */}
+              {/* Digital Farmer ID - REQUIRED */}
               <label className="mt-5 block space-y-2">
                 <span className="text-sm font-semibold">
-                  Upload ID <span className="text-destructive">*</span>
+                  Upload ID{' '}
+                  <span className="text-destructive">*</span>
                 </span>
 
                 <span className="block text-xs text-muted-foreground">
@@ -491,7 +497,6 @@ function Login({
                 <input
                   type="file"
                   accept=".pdf,.jpg,.jpeg,.png"
-                  required
                   onChange={(e) => {
                     setFarmerId(e.target.files?.[0] ?? null)
                     setError('')
@@ -506,7 +511,7 @@ function Login({
                 )}
               </label>
 
-              {/* Quality Certificate - Optional */}
+              {/* Quality Certificate - OPTIONAL */}
               <label className="mt-5 block space-y-2">
                 <span className="text-sm font-semibold">
                   Quality Certificate
@@ -520,7 +525,9 @@ function Login({
                   type="file"
                   accept=".pdf,.jpg,.jpeg,.png"
                   onChange={(e) => {
-                    setQualityCertificate(e.target.files?.[0] ?? null)
+                    setQualityCertificate(
+                      e.target.files?.[0] ?? null,
+                    )
                     setError('')
                   }}
                   className="block w-full cursor-pointer rounded-xl border border-input bg-background p-3 text-sm file:mr-4 file:rounded-lg file:border-0 file:bg-primary file:px-3 file:py-2 file:text-sm file:font-semibold file:text-primary-foreground"
@@ -565,7 +572,9 @@ function Login({
                   value={otp}
                   onChange={(e) =>
                     setOtp(
-                      e.target.value.replace(/\D/g, '').slice(0, 4),
+                      e.target.value
+                        .replace(/\D/g, '')
+                        .slice(0, 4),
                     )
                   }
                   placeholder="4-digit OTP"
@@ -577,12 +586,21 @@ function Login({
                 OTP sent to +91 {phone}
               </p>
 
+              {/* DEMO OTP */}
+              <div className="mt-3 rounded-xl border border-primary/20 bg-primary/5 px-4 py-3">
+                <p className="text-sm font-semibold text-primary">
+                  Demo OTP: <span className="text-lg">{sentOtp}</span>
+                </p>
+              </div>
+
+              {/* Error */}
               {error && (
                 <p className="mt-3 text-xs text-destructive">
                   {error}
                 </p>
               )}
 
+              {/* Verify OTP */}
               <button
                 type="button"
                 onClick={verifyOtp}
@@ -592,6 +610,7 @@ function Login({
                 Verify OTP
               </button>
 
+              {/* Change Details */}
               <button
                 type="button"
                 onClick={() => {
