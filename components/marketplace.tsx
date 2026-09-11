@@ -431,6 +431,8 @@ export function BuyerMarketplace({
   offers,
   context,
   setOffers,
+  goToGrading,
+  goToLogistics,
 }: {
   offers: Offer[]
   context: {
@@ -442,6 +444,8 @@ export function BuyerMarketplace({
     netReturn: number
   }
   setOffers: React.Dispatch<React.SetStateAction<Offer[]>>
+  goToGrading: (offerId: string) => void
+  goToLogistics: () => void
 }) {
   const { t } = useLanguage()
 
@@ -490,7 +494,12 @@ export function BuyerMarketplace({
       </div>
 
       {showMyOffers ? (
-        <BuyerOfferStatusList offers={offers} />
+        <BuyerOfferStatusList
+          offers={offers}
+          setOffers={setOffers}
+          goToGrading={goToGrading}
+          goToLogistics={goToLogistics}
+        />
       ) : (
         <>
       <section className="rounded-2xl border border-border bg-card p-4 shadow-sm">
@@ -595,6 +604,9 @@ export function BuyerMarketplace({
           listing={selected}
           close={() => setSelected(null)}
           submit={(offer) => {
+            // Buyer offer now joins the SAME shared offers list the
+            // farmer sees — no longer a dead-end banner. It renders
+            // through the exact same OfferCard as any other offer.
             setOffers((current) => [...current, offer])
             setSubmitted(offer)
             setSelected(null)
@@ -609,8 +621,40 @@ export function BuyerMarketplace({
 /* Buyer's own offer status list (read-only — no accept/reject/negotiate)    */
 /* -------------------------------------------------------------------------- */
 
-function BuyerOfferStatusList({ offers }: { offers: Offer[] }) {
+function BuyerOfferStatusList({
+  offers,
+  setOffers,
+  goToGrading,
+  goToLogistics,
+}: {
+  offers: Offer[]
+  setOffers: React.Dispatch<React.SetStateAction<Offer[]>>
+  goToGrading: (offerId: string) => void
+  goToLogistics: () => void
+}) {
   const { t } = useLanguage()
+
+  const gradeLabels: Record<QualityGrade, string> = {
+    A: t.gradeALabel,
+    B: t.gradeBLabel,
+    C: t.gradeCLabel,
+  }
+
+  const acceptCounter = (offer: Offer) =>
+    setOffers((current) =>
+      current.map((item) =>
+        item.id === offer.id
+          ? { ...item, price: offer.counterPrice ?? item.price, status: 'Accepted' }
+          : item,
+      ),
+    )
+
+  const rejectCounter = (offerId: string) =>
+    setOffers((current) =>
+      current.map((item) =>
+        item.id === offerId ? { ...item, status: 'Rejected' } : item,
+      ),
+    )
 
   if (offers.length === 0) {
     return (
@@ -623,53 +667,101 @@ function BuyerOfferStatusList({ offers }: { offers: Offer[] }) {
 
   return (
     <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
-      {offers.map((offer) => (
-        <div
-          key={offer.id}
-          className="rounded-2xl border border-border bg-card p-5"
-        >
-          <div className="flex items-center justify-between">
-            <h3 className="font-serif text-lg font-bold">
-              {offer.crop}
-            </h3>
+      {offers.map((offer) => {
+        const hasCounter =
+          offer.counterPrice != null && offer.status === 'Pending'
 
-            <Badge
-              tone={
-                offer.status === 'Accepted'
-                  ? 'green'
-                  : offer.status === 'Rejected'
-                    ? 'red'
-                    : 'amber'
-              }
-            >
-              {offer.status}
-            </Badge>
+        return (
+          <div
+            key={offer.id}
+            className="rounded-2xl border border-border bg-card p-5"
+          >
+            <div className="flex items-center justify-between">
+              <h3 className="font-serif text-lg font-bold">
+                {offer.crop}
+              </h3>
+
+              <Badge
+                tone={
+                  offer.status === 'Accepted'
+                    ? 'green'
+                    : offer.status === 'Rejected'
+                      ? 'red'
+                      : 'amber'
+                }
+              >
+                {offer.status}
+              </Badge>
+            </div>
+
+            <p className="mt-1 text-sm text-muted-foreground">
+              {offer.quantity} quintals · {money(offer.price)}/q
+            </p>
+
+            {hasCounter && (
+              <div className="mt-3 space-y-3 rounded-xl bg-amber-50 p-3 text-xs text-amber-900">
+                <p className="font-bold">
+                  Farmer countered: {money(offer.counterPrice as number)}/q
+                </p>
+
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => acceptCounter(offer)}
+                    className="min-h-9 flex-1 rounded-lg bg-primary px-3 text-xs font-bold text-primary-foreground"
+                  >
+                    Accept Counter
+                  </button>
+
+                  <button
+                    onClick={() => rejectCounter(offer.id)}
+                    className="min-h-9 flex-1 rounded-lg border border-destructive px-3 text-xs font-bold text-destructive"
+                  >
+                    Reject
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {offer.status === 'Accepted' && !offer.grade && (
+              <div className="mt-3 space-y-2 rounded-lg bg-emerald-50 p-3 text-xs text-emerald-900">
+                <p className="font-bold">
+                  Accepted — grade the produce and set the final
+                  price.
+                </p>
+
+                <button
+                  onClick={() => goToGrading(offer.id)}
+                  className="min-h-9 w-full rounded-lg bg-primary px-3 text-xs font-bold text-primary-foreground"
+                >
+                  {t.gradeSetPriceBtn}
+                </button>
+              </div>
+            )}
+
+            {offer.status === 'Accepted' && offer.grade && (
+              <div className="mt-3 space-y-2 rounded-lg bg-emerald-50 p-3 text-xs text-emerald-900">
+                <p className="font-bold">
+                  Graded {gradeLabels[offer.grade]} · Final price{' '}
+                  {money(offer.finalPrice ?? offer.price)}/q
+                </p>
+
+                <button
+                  onClick={goToLogistics}
+                  className="min-h-9 w-full rounded-lg bg-primary px-3 text-xs font-bold text-primary-foreground"
+                >
+                  {t.planTransportBtn}
+                </button>
+              </div>
+            )}
+
+            {offer.status === 'Rejected' && (
+              <p className="mt-3 text-xs font-semibold text-red-700">
+                This offer was rejected.
+              </p>
+            )}
           </div>
-
-          <p className="mt-1 text-sm text-muted-foreground">
-            {offer.quantity} quintals · {money(offer.price)}/q
-          </p>
-
-          {offer.counterPrice != null && offer.status === 'Pending' && (
-            <p className="mt-3 rounded-lg bg-amber-50 p-2 text-xs font-semibold text-amber-900">
-              Farmer countered: {money(offer.counterPrice)}/q
-            </p>
-          )}
-
-          {offer.status === 'Accepted' && offer.grade && (
-            <p className="mt-3 rounded-lg bg-emerald-50 p-2 text-xs font-semibold text-emerald-900">
-              Graded {offer.grade} · Final price{' '}
-              {money(offer.finalPrice ?? offer.price)}/q
-            </p>
-          )}
-
-          {offer.status === 'Accepted' && !offer.grade && (
-            <p className="mt-3 rounded-lg bg-emerald-50 p-2 text-xs font-semibold text-emerald-900">
-              Accepted — grading pending
-            </p>
-          )}
-        </div>
-      ))}
+        )
+      })}
     </div>
   )
 }
@@ -1086,6 +1178,8 @@ export function FarmerOffers({
     status: 'Pending',
   }
 
+  // Buyer-submitted offers (from BuyerMarketplace) and the demo
+  // fallback both render through the exact same OfferCard.
   const shown = offers.length ? offers : [defaultOffer]
 
   const [negotiatingId, setNegotiatingId] = useState<string | null>(

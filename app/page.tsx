@@ -10,6 +10,8 @@ import {
   Menu,
   Minus,
   Package,
+  Phone,
+  ShieldCheck,
   Sprout,
   TrendingUp,
   Truck,
@@ -239,7 +241,6 @@ function Header({
   locationLabel,
   t,
   role,
-  switchRole,
 }: {
   onDemo: () => void
   onMenu: () => void
@@ -250,7 +251,6 @@ function Header({
   locationLabel: string
   t: Labels
   role: 'farmer' | 'buyer'
-  switchRole: () => void
 }) {
   return (
     <header className="flex min-h-[76px] items-center justify-between gap-3 border-b border-border bg-background/95 px-4 py-4 backdrop-blur md:px-8">
@@ -286,13 +286,9 @@ function Header({
       </div>
 
       <div className="flex items-center gap-2">
-        <button
-          type="button"
-          onClick={switchRole}
-          className="hidden rounded-lg border border-border px-3 py-1.5 text-xs font-bold text-muted-foreground sm:block"
-        >
-          {role === 'farmer' ? '🌾 Farmer' : '🛒 Buyer'} · Switch
-        </button>
+        <span className="hidden rounded-lg border border-border px-3 py-1.5 text-xs font-bold text-muted-foreground sm:block">
+          {role === 'farmer' ? '🌾 Farmer' : '🛒 Buyer'}
+        </span>
 
         <div className="hidden rounded-lg border border-border bg-card p-1 sm:flex">
           {(['English', 'मराठी', 'हिंदी'] as Language[]).map(
@@ -366,6 +362,174 @@ function DemoSteps({ view }: { view: View }) {
           {index + 1}. {step}
         </span>
       ))}
+    </div>
+  )
+}
+
+/* -------------------------------------------------------------------------- */
+/* Login (mobile + OTP)                                                      */
+/* -------------------------------------------------------------------------- */
+
+function Login({
+  onVerified,
+}: {
+  onVerified: (phone: string) => void
+}) {
+  const [phone, setPhone] = useState('')
+  const [otp, setOtp] = useState('')
+  const [sentOtp, setSentOtp] = useState<string | null>(null)
+  const [error, setError] = useState('')
+
+  const isValidPhone = /^\d{10}$/.test(phone)
+  const isValidOtp = /^\d{4}$/.test(otp)
+
+  function sendOtp() {
+    if (!isValidPhone) {
+      setError('Enter a valid 10-digit mobile number')
+      return
+    }
+
+    setError('')
+
+    // Prototype only: OTP simulated locally, shown on screen.
+    // Real deployment wires this to an SMS/OTP provider.
+    const generated = String(
+      Math.floor(1000 + Math.random() * 9000),
+    )
+
+    setSentOtp(generated)
+    setOtp('')
+  }
+
+  function verifyOtp() {
+    if (otp !== sentOtp) {
+      setError('Incorrect OTP. Try again.')
+      return
+    }
+
+    onVerified(phone)
+  }
+
+  return (
+    <div className="flex min-h-screen items-center justify-center bg-background p-6">
+      <div className="w-full max-w-md space-y-8">
+        <div className="text-center">
+          <Logo />
+        </div>
+
+        <div className="rounded-3xl border border-border bg-card p-7 shadow-sm">
+          <div className="flex items-center justify-center gap-2">
+            <ShieldCheck className="size-5 text-primary" />
+
+            <h1 className="font-serif text-2xl font-bold">
+              Log in
+            </h1>
+          </div>
+
+          <p className="mt-2 text-center text-sm text-muted-foreground">
+            Enter your mobile number to continue
+          </p>
+
+          {!sentOtp ? (
+            <>
+              <label className="mt-6 block space-y-2">
+                <span className="text-sm font-semibold">
+                  Mobile number
+                </span>
+
+                <div className="relative">
+                  <Phone className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+
+                  <input
+                    type="tel"
+                    inputMode="numeric"
+                    maxLength={10}
+                    value={phone}
+                    onChange={(e) =>
+                      setPhone(
+                        e.target.value.replace(/\D/g, '').slice(0, 10),
+                      )
+                    }
+                    placeholder="10-digit mobile number"
+                    className="h-12 w-full rounded-xl border border-input bg-background pl-9 pr-3"
+                  />
+                </div>
+              </label>
+
+              {error && (
+                <p className="mt-2 text-xs text-destructive">
+                  {error}
+                </p>
+              )}
+
+              <button
+                type="button"
+                disabled={!isValidPhone}
+                onClick={sendOtp}
+                className="mt-5 flex min-h-12 w-full items-center justify-center rounded-xl bg-primary font-bold text-primary-foreground disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Send OTP
+              </button>
+            </>
+          ) : (
+            <>
+              <p className="mt-6 text-sm text-muted-foreground">
+                OTP sent to +91 {phone}.{' '}
+                <span className="font-bold text-primary">
+                  (demo OTP: {sentOtp})
+                </span>
+              </p>
+
+              <label className="mt-4 block space-y-2">
+                <span className="text-sm font-semibold">
+                  Enter OTP
+                </span>
+
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  maxLength={4}
+                  value={otp}
+                  onChange={(e) =>
+                    setOtp(
+                      e.target.value.replace(/\D/g, '').slice(0, 4),
+                    )
+                  }
+                  placeholder="4-digit OTP"
+                  className="h-12 w-full rounded-xl border border-input bg-background px-3 text-center text-lg tracking-[0.5em]"
+                />
+              </label>
+
+              {error && (
+                <p className="mt-2 text-xs text-destructive">
+                  {error}
+                </p>
+              )}
+
+              <button
+                type="button"
+                disabled={!isValidOtp}
+                onClick={verifyOtp}
+                className="mt-5 flex min-h-12 w-full items-center justify-center rounded-xl bg-primary font-bold text-primary-foreground disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Verify &amp; Continue
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setSentOtp(null)
+                  setOtp('')
+                  setError('')
+                }}
+                className="mt-3 w-full text-center text-xs font-semibold text-muted-foreground"
+              >
+                Change number
+              </button>
+            </>
+          )}
+        </div>
+      </div>
     </div>
   )
 }
@@ -2112,6 +2276,9 @@ function MobileNav({
 /* -------------------------------------------------------------------------- */
 
 export default function Page() {
+  const [phone, setPhone] =
+    useState<string | null>(null)
+
   const [role, setRole] =
     useState<'farmer' | 'buyer' | null>(null)
 
@@ -2256,6 +2423,10 @@ export default function Page() {
     netReturn,
   }
 
+  if (!phone) {
+    return <Login onVerified={setPhone} />
+  }
+
   if (!role) {
     return (
       <RoleSelect
@@ -2348,7 +2519,6 @@ export default function Page() {
           locationLabel={getLocationLabel(locationId)}
           t={t}
           role={role}
-          switchRole={() => setRole(null)}
         />
 
         <main className="mx-auto w-full max-w-7xl flex-1 space-y-7 px-4 py-6 pb-28 md:px-8 md:py-8">
@@ -2481,6 +2651,8 @@ export default function Page() {
               offers={offers}
               context={context}
               setOffers={setOffers}
+              goToGrading={goToGrading}
+              goToLogistics={() => setView('logistics')}
             />
           )}
 
