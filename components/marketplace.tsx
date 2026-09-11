@@ -8,10 +8,6 @@ import { locations } from '@/lib/locations'
 
 export type MarketplaceView = 'marketplace' | 'offers'
 
-export type QualityGrade = 'A' | 'B' | 'C'
-
-type OfferStatus = 'Pending' | 'Accepted' | 'Rejected'
-
 type Listing = {
   id: string
   crop: string
@@ -19,9 +15,15 @@ type Listing = {
   farmer: string
   location: string
   quantity: number
+  price: number
   date: string
   quality: string
+  isLive?: boolean
 }
+
+type OfferStatus = 'Pending' | 'Accepted' | 'Rejected'
+
+export type QualityGrade = 'A' | 'B' | 'C'
 
 export type Offer = {
   id: string
@@ -32,197 +34,12 @@ export type Offer = {
   expected: number
   location: string
   status: OfferStatus
+  // set when the farmer has sent a counter-price back to the buyer
   counterPrice?: number
+  // set by the buyer on the dedicated grading screen, after accept
   grade?: QualityGrade
   finalPrice?: number
 }
-
-/* -------------------------------------------------------------------------- */
-/* Helpers                                                                    */
-/* -------------------------------------------------------------------------- */
-
-const money = (value: number) =>
-  `₹${Math.round(value).toLocaleString('en-IN')}`
-
-function normalizeCropName(value: string) {
-  return value
-    .toLowerCase()
-    .trim()
-    .replace(/[^a-z0-9]/g, '')
-}
-
-/*
- * These are ONLY name mappings.
- * There are NO prices here.
- *
- * Government mandi data can use names such as:
- * Soyabean instead of Soybean
- * Arhar instead of Tur
- * Bengal Gram instead of Gram
- */
-const CROP_ALIASES: Record<string, string[]> = {
-  onion: ['onion'],
-  tomato: ['tomato'],
-  wheat: ['wheat'],
-  soybean: ['soybean', 'soyabean', 'soya bean', 'soya'],
-  cotton: ['cotton'],
-  potato: ['potato'],
-  maize: ['maize', 'corn'],
-  gram: ['gram', 'bengal gram', 'chickpea', 'chana'],
-  tur: ['tur', 'arhar', 'red gram'],
-  bajra: ['bajra', 'pearl millet'],
-  jowar: ['jowar', 'sorghum'],
-  groundnut: ['groundnut', 'peanut'],
-  mustard: ['mustard'],
-  rice: ['rice', 'paddy'],
-}
-
-function commodityMatchesCrop(
-  apiCommodity: string,
-  cropName: string,
-) {
-  const api = normalizeCropName(apiCommodity)
-  const crop = normalizeCropName(cropName)
-
-  if (api === crop) return true
-
-  const aliases = CROP_ALIASES[crop]
-
-  if (!aliases) {
-    return api.includes(crop) || crop.includes(api)
-  }
-
-  return aliases.some((alias) => {
-    const normalizedAlias = normalizeCropName(alias)
-
-    return (
-      api === normalizedAlias ||
-      api.includes(normalizedAlias) ||
-      normalizedAlias.includes(api)
-    )
-  })
-}
-
-/* -------------------------------------------------------------------------- */
-/* Government API types                                                       */
-/* -------------------------------------------------------------------------- */
-
-type MandiRecord = {
-  state?: string
-  district?: string
-  market?: string
-  commodity?: string
-  variety?: string
-  arrival_date?: string
-  min_price?: string | number
-  max_price?: string | number
-  modal_price?: string | number
-}
-
-type MandiApiResponse = {
-  records?: MandiRecord[]
-}
-
-/* -------------------------------------------------------------------------- */
-/* Live mandi prices                                                          */
-/* -------------------------------------------------------------------------- */
-
-function useMandiPrices() {
-  const [records, setRecords] = useState<MandiRecord[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState(false)
-
-  useEffect(() => {
-    let cancelled = false
-
-    async function loadPrices() {
-      try {
-        setLoading(true)
-        setError(false)
-
-        const response = await fetch(
-          '/api/mandi-prices?state=Maharashtra&limit=5000',
-          {
-            cache: 'no-store',
-          },
-        )
-
-        if (!response.ok) {
-          throw new Error('Failed to fetch mandi prices')
-        }
-
-        const data: MandiApiResponse = await response.json()
-
-        if (!cancelled) {
-          setRecords(data.records ?? [])
-        }
-      } catch (err) {
-        console.error('Mandi price fetch failed:', err)
-
-        if (!cancelled) {
-          setRecords([])
-          setError(true)
-        }
-      } finally {
-        if (!cancelled) {
-          setLoading(false)
-        }
-      }
-    }
-
-    loadPrices()
-
-    return () => {
-      cancelled = true
-    }
-  }, [])
-
-  const getCropPrice = (cropName: string): number | null => {
-    const matchingRecords = records.filter((record) => {
-      if (!record.commodity) return false
-
-      return commodityMatchesCrop(
-        record.commodity,
-        cropName,
-      )
-    })
-
-    const prices = matchingRecords
-      .map((record) => Number(record.modal_price))
-      .filter(
-        (price) =>
-          Number.isFinite(price) && price > 0,
-      )
-
-    if (prices.length === 0) {
-      return null
-    }
-
-    /*
-     * Average modal price from all matching Maharashtra mandi
-     * records returned by the government API.
-     */
-    const average =
-      prices.reduce((sum, price) => sum + price, 0) /
-      prices.length
-
-    return Math.round(average)
-  }
-
-  return {
-    records,
-    loading,
-    error,
-    getCropPrice,
-  }
-}
-
-/* -------------------------------------------------------------------------- */
-/* Prototype listings                                                         */
-/*                                                                            */
-/* Farmer / quantity / location are still prototype data.                    */
-/* PRICE IS INTENTIONALLY NOT STORED HERE.                                   */
-/* -------------------------------------------------------------------------- */
 
 const listings: Listing[] = [
   {
@@ -232,6 +49,7 @@ const listings: Listing[] = [
     farmer: 'Ramesh Patil',
     location: 'Nashik, Maharashtra',
     quantity: 20,
+    price: 2650,
     date: '5 Sept 2026',
     quality: 'Grade A',
   },
@@ -242,6 +60,7 @@ const listings: Listing[] = [
     farmer: 'Suresh Jadhav',
     location: 'Nashik',
     quantity: 35,
+    price: 2600,
     date: '6 Sept 2026',
     quality: 'Grade A',
   },
@@ -252,6 +71,7 @@ const listings: Listing[] = [
     farmer: 'Meena Shinde',
     location: 'Pune',
     quantity: 15,
+    price: 2200,
     date: '5 Sept 2026',
     quality: 'Grade A',
   },
@@ -262,89 +82,97 @@ const listings: Listing[] = [
     farmer: 'Vilas Pawar',
     location: 'Ahilyanagar',
     quantity: 30,
+    price: 4700,
     date: '7 Sept 2026',
-    quality: 'Grade A',
-  },
-  {
-    id: 'wheat-20',
-    crop: 'Wheat',
-    icon: '🌾',
-    farmer: 'Mahesh Pawar',
-    location: 'Pune',
-    quantity: 20,
-    date: '7 Sept 2026',
-    quality: 'Grade A',
-  },
-  {
-    id: 'cotton-25',
-    crop: 'Cotton',
-    icon: '🌿',
-    farmer: 'Raju Shinde',
-    location: 'Nagpur',
-    quantity: 25,
-    date: '8 Sept 2026',
-    quality: 'Grade A',
-  },
-  {
-    id: 'potato-30',
-    crop: 'Potato',
-    icon: '🥔',
-    farmer: 'Ganesh More',
-    location: 'Pune',
-    quantity: 30,
-    date: '8 Sept 2026',
-    quality: 'Grade A',
-  },
-  {
-    id: 'maize-25',
-    crop: 'Maize',
-    icon: '🌽',
-    farmer: 'Sanjay Pawar',
-    location: 'Nashik',
-    quantity: 25,
-    date: '8 Sept 2026',
-    quality: 'Grade A',
-  },
-  {
-    id: 'gram-20',
-    crop: 'Gram',
-    icon: '🫘',
-    farmer: 'Dinesh Patil',
-    location: 'Ahilyanagar',
-    quantity: 20,
-    date: '8 Sept 2026',
     quality: 'Grade A',
   },
 ]
-
-/* -------------------------------------------------------------------------- */
-/* Buyers                                                                     */
-/* -------------------------------------------------------------------------- */
 
 const buyers = [
-  {
-    name: 'ABC Foods',
-    location: 'Nashik',
-    crops: 'Onion, Tomato',
-    quantity: '10–100 quintals',
-  },
-  {
-    name: 'FreshMart',
-    location: 'Pune',
-    crops: 'Onion, Potato',
-    quantity: '20–80 quintals',
-  },
-  {
-    name: 'AgroTrade',
-    location: 'Nashik',
-    crops: 'Onion, Soybean',
-    quantity: '15–60 quintals',
-  },
+  { name: 'ABC Foods', location: 'Nashik', crops: 'Onion, Tomato', quantity: '10–100 quintals' },
+  { name: 'FreshMart', location: 'Pune', crops: 'Onion, Potato', quantity: '20–80 quintals' },
+  { name: 'AgroTrade', location: 'Nashik', crops: 'Onion, Soybean', quantity: '15–60 quintals' },
 ]
 
+const money = (value: number) =>
+  `₹${Math.round(value).toLocaleString('en-IN')}`
+
 /* -------------------------------------------------------------------------- */
-/* UI helpers                                                                 */
+/* Live mandi prices (real data.gov.in data, Maharashtra)                    */
 /* -------------------------------------------------------------------------- */
+
+type MandiRecord = {
+  state: string
+  district: string
+  market: string
+  commodity: string
+  variety: string
+  arrival_date: string
+  min_price: string
+  max_price: string
+  modal_price: string
+}
+
+// Real API se listing.crop jo naam use karta hai usse map karne ke liye —
+// agmarknet me kabhi kabhi thoda alag naming milta hai.
+const CROP_TO_COMMODITY: Record<string, string> = {
+  Onion: 'Onion',
+  Tomato: 'Tomato',
+  Wheat: 'Wheat',
+  Soybean: 'Soyabean',
+  Cotton: 'Cotton',
+  Potato: 'Potato',
+  Maize: 'Maize',
+  Gram: 'Gram',
+}
+
+function useMandiPrices() {
+  const [prices, setPrices] = useState<Record<string, number>>({})
+
+  useEffect(() => {
+    let cancelled = false
+
+    fetch('/api/mandi-prices?state=Maharashtra&limit=500')
+      .then((res) => res.json())
+      .then((data: { records?: MandiRecord[] }) => {
+        if (cancelled) return
+
+        const records = data.records ?? []
+        const sums: Record<string, { total: number; count: number }> = {}
+
+        records.forEach((record) => {
+          const modal = Number(record.modal_price)
+
+          if (!record.commodity || !Number.isFinite(modal) || modal <= 0) {
+            return
+          }
+
+          const key = record.commodity.trim()
+          sums[key] = sums[key] ?? { total: 0, count: 0 }
+          sums[key].total += modal
+          sums[key].count += 1
+        })
+
+        const averages: Record<string, number> = {}
+
+        Object.entries(sums).forEach(([commodity, { total, count }]) => {
+          averages[commodity] = Math.round(total / count)
+        })
+
+        setPrices(averages)
+      })
+      .catch(() => {
+        // Live prices unavailable — listings quietly fall back to
+        // their prototype price, nothing breaks.
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  return prices
+}
 
 function Badge({
   children,
@@ -378,73 +206,46 @@ function Info({
 }) {
   return (
     <div>
-      <p className="text-xs text-muted-foreground">
-        {label}
-      </p>
-
-      <p className="mt-1 font-bold">
-        {value}
-      </p>
+      <p className="text-xs text-muted-foreground">{label}</p>
+      <p className="mt-1 font-bold">{value}</p>
     </div>
   )
 }
 
 /* -------------------------------------------------------------------------- */
-/* Offer modal                                                                */
+/* Offer modal (buyer makes an offer)                                        */
 /* -------------------------------------------------------------------------- */
 
 function OfferModal({
   listing,
-  price,
   close,
   submit,
 }: {
   listing: Listing
-  price: number
   close: () => void
   submit: (offer: Offer) => void
 }) {
-  const [buyerName, setBuyerName] = useState(
-    buyers[0]?.name ?? '',
-  )
-
-  /*
-   * IMPORTANT:
-   * Initial offer price comes directly from API.
-   * No hardcoded price.
-   */
-  const [offerPrice, setOfferPrice] = useState(price)
-
-  const [quantity, setQuantity] = useState(
-    listing.quantity,
-  )
-
+  const [buyerName, setBuyerName] = useState('ABC Foods')
+  const [price, setPrice] = useState(2700)
+  const [quantity, setQuantity] = useState(listing.quantity)
   const [message, setMessage] = useState(
     'Interested in purchasing the full quantity.',
   )
-
   const [error, setError] = useState('')
 
   const onSubmit = () => {
-    if (offerPrice <= 0) {
-      setError(
-        'Offer price must be greater than 0.',
-      )
-      return
+    if (price <= 0) {
+      return setError('Offer price must be greater than 0.')
     }
 
     if (quantity <= 0) {
-      setError(
-        'Quantity must be greater than 0.',
-      )
-      return
+      return setError('Quantity must be greater than 0.')
     }
 
     if (quantity > listing.quantity) {
-      setError(
+      return setError(
         `Offer quantity cannot exceed ${listing.quantity} quintals.`,
       )
-      return
     }
 
     submit({
@@ -452,8 +253,8 @@ function OfferModal({
       buyer: buyerName,
       crop: listing.crop,
       quantity,
-      price: offerPrice,
-      expected: price,
+      price,
+      expected: listing.price,
       location: listing.location,
       status: 'Pending',
     })
@@ -468,10 +269,7 @@ function OfferModal({
       <div className="w-full max-w-lg rounded-t-3xl bg-card p-6 shadow-2xl sm:rounded-3xl">
         <div className="flex items-start justify-between">
           <div>
-            <Badge tone="green">
-              Live Mandi Price
-            </Badge>
-
+            <Badge>Prototype Offer</Badge>
             <h2 className="mt-3 font-serif text-2xl font-bold">
               Make an offer
             </h2>
@@ -488,20 +286,14 @@ function OfferModal({
 
         <div className="mt-5 grid grid-cols-2 gap-4 rounded-2xl bg-muted p-4 text-sm">
           <div>
-            <p className="text-xs text-muted-foreground">
-              Produce
-            </p>
-
+            <p className="text-xs text-muted-foreground">Produce</p>
             <p className="mt-1 font-bold">
               {listing.icon} {listing.crop}
             </p>
           </div>
 
           <div>
-            <p className="text-xs text-muted-foreground">
-              Available
-            </p>
-
+            <p className="text-xs text-muted-foreground">Available</p>
             <p className="mt-1 font-bold">
               {listing.quantity} quintals
             </p>
@@ -509,11 +301,10 @@ function OfferModal({
 
           <div>
             <p className="text-xs text-muted-foreground">
-              Current mandi price
+              Farmer expected
             </p>
-
-            <p className="mt-1 font-bold text-primary">
-              {money(price)}/q
+            <p className="mt-1 font-bold">
+              {money(listing.price)}/q
             </p>
           </div>
         </div>
@@ -521,19 +312,13 @@ function OfferModal({
         <div className="mt-5 space-y-4">
           <label className="block text-sm font-semibold">
             Buyer / company name
-
             <select
               className="mt-2 h-12 w-full rounded-xl border border-input bg-background px-3"
               value={buyerName}
-              onChange={(e) =>
-                setBuyerName(e.target.value)
-              }
+              onChange={(e) => setBuyerName(e.target.value)}
             >
               {buyers.map((buyer) => (
-                <option
-                  key={buyer.name}
-                  value={buyer.name}
-                >
+                <option key={buyer.name} value={buyer.name}>
                   {buyer.name}
                 </option>
               ))}
@@ -542,46 +327,33 @@ function OfferModal({
 
           <label className="block text-sm font-semibold">
             Offer price
-
             <input
               className="mt-2 h-12 w-full rounded-xl border border-input bg-background px-3"
               type="number"
               min="1"
-              value={offerPrice}
-              onChange={(e) =>
-                setOfferPrice(
-                  Number(e.target.value),
-                )
-              }
+              value={price}
+              onChange={(e) => setPrice(Number(e.target.value))}
             />
           </label>
 
           <label className="block text-sm font-semibold">
             Quantity (quintals)
-
             <input
               className="mt-2 h-12 w-full rounded-xl border border-input bg-background px-3"
               type="number"
               min="1"
               max={listing.quantity}
               value={quantity}
-              onChange={(e) =>
-                setQuantity(
-                  Number(e.target.value),
-                )
-              }
+              onChange={(e) => setQuantity(Number(e.target.value))}
             />
           </label>
 
           <label className="block text-sm font-semibold">
             Message
-
             <textarea
               className="mt-2 min-h-20 w-full rounded-xl border border-input bg-background p-3"
               value={message}
-              onChange={(e) =>
-                setMessage(e.target.value)
-              }
+              onChange={(e) => setMessage(e.target.value)}
             />
           </label>
 
@@ -604,66 +376,45 @@ function OfferModal({
 }
 
 /* -------------------------------------------------------------------------- */
-/* Listing card                                                               */
+/* Listing card                                                              */
 /* -------------------------------------------------------------------------- */
 
 function ListingCard({
   listing,
-  price,
-  loading,
   open,
+  isLive,
 }: {
   listing: Listing
-  price: number | null
-  loading: boolean
   open: (listing: Listing) => void
+  isLive?: boolean
 }) {
   return (
     <article className="rounded-2xl border border-border bg-card p-5 shadow-sm">
       <div className="flex items-start justify-between gap-3">
         <div>
-          <p className="text-3xl">
-            {listing.icon}
-          </p>
-
+          <p className="text-3xl">{listing.icon}</p>
           <h3 className="mt-2 font-serif text-xl font-bold">
             {listing.crop}
           </h3>
-
           <p className="mt-1 text-sm text-muted-foreground">
             {listing.farmer}
           </p>
         </div>
 
-        <Badge
-          tone={
-            price != null
-              ? 'green'
-              : 'muted'
-          }
-        >
-          {price != null
-            ? 'Live Mandi Price'
-            : 'Price Unavailable'}
-        </Badge>
+        <div className="flex flex-col items-end gap-1.5">
+          <Badge tone="green">{listing.quality}</Badge>
+          {isLive && <Badge tone="amber">Live Mandi Price</Badge>}
+        </div>
       </div>
 
       <div className="mt-5 grid grid-cols-2 gap-4 border-y border-border py-4 text-sm">
         <div>
-          <p className="text-xs text-muted-foreground">
-            Location
-          </p>
-
-          <p className="mt-1 font-semibold">
-            {listing.location}
-          </p>
+          <p className="text-xs text-muted-foreground">Location</p>
+          <p className="mt-1 font-semibold">{listing.location}</p>
         </div>
 
         <div>
-          <p className="text-xs text-muted-foreground">
-            Quantity
-          </p>
-
+          <p className="text-xs text-muted-foreground">Quantity</p>
           <p className="mt-1 font-semibold">
             {listing.quantity} quintals
           </p>
@@ -671,34 +422,23 @@ function ListingCard({
 
         <div>
           <p className="text-xs text-muted-foreground">
-            Current mandi price
+            Expected price
           </p>
-
           <p className="mt-1 font-bold text-primary">
-            {loading
-              ? 'Loading...'
-              : price != null
-                ? `${money(price)}/q`
-                : 'Not available'}
+            {money(listing.price)}/q
           </p>
         </div>
 
         <div>
-          <p className="text-xs text-muted-foreground">
-            Available
-          </p>
-
-          <p className="mt-1 font-semibold">
-            {listing.date}
-          </p>
+          <p className="text-xs text-muted-foreground">Available</p>
+          <p className="mt-1 font-semibold">{listing.date}</p>
         </div>
       </div>
 
       <div className="mt-4 flex gap-3">
         <button
           onClick={() => open(listing)}
-          disabled={price == null}
-          className="min-h-11 flex-1 rounded-xl bg-accent px-3 text-sm font-bold text-accent-foreground disabled:cursor-not-allowed disabled:opacity-50"
+          className="min-h-11 flex-1 rounded-xl bg-accent px-3 text-sm font-bold text-accent-foreground"
         >
           Make Offer
         </button>
@@ -713,10 +453,6 @@ function ListingCard({
     </article>
   )
 }
-
-/* -------------------------------------------------------------------------- */
-/* Buyer cards                                                                */
-/* -------------------------------------------------------------------------- */
 
 function BuyerCards() {
   return (
@@ -742,9 +478,7 @@ function BuyerCards() {
                 {buyer.name}
               </h3>
 
-              <Badge>
-                Prototype Buyer
-              </Badge>
+              <Badge>Prototype Buyer</Badge>
             </div>
 
             <p className="mt-3 flex items-center gap-2 text-sm text-muted-foreground">
@@ -755,7 +489,6 @@ function BuyerCards() {
             <p className="mt-4 text-xs text-muted-foreground">
               Interested in
             </p>
-
             <p className="mt-1 text-sm font-semibold">
               {buyer.crops}
             </p>
@@ -763,7 +496,6 @@ function BuyerCards() {
             <p className="mt-3 text-xs text-muted-foreground">
               Typical quantity
             </p>
-
             <p className="mt-1 text-sm font-semibold">
               {buyer.quantity}
             </p>
@@ -794,89 +526,46 @@ export function BuyerMarketplace({
     marketPrice: number
     netReturn: number
   }
-  setOffers: React.Dispatch<
-    React.SetStateAction<Offer[]>
-  >
+  setOffers: React.Dispatch<React.SetStateAction<Offer[]>>
   goToGrading: (offerId: string) => void
   goToLogistics: () => void
 }) {
   const { t } = useLanguage()
 
-  const {
-    loading,
-    error: mandiError,
-    getCropPrice,
-  } = useMandiPrices()
+  const mandiPrices = useMandiPrices()
 
-  const [cropFilter, setCropFilter] =
-    useState('All crops')
+  const [cropFilter, setCropFilter] = useState('All crops')
+  const [locationFilter, setLocationFilter] = useState('All locations')
+  const [minPrice, setMinPrice] = useState('')
+  const [selected, setSelected] = useState<Listing | null>(null)
+  const [submitted, setSubmitted] = useState<Offer | null>(null)
+  const [showMyOffers, setShowMyOffers] = useState(false)
 
-  const [locationFilter, setLocationFilter] =
-    useState('All locations')
-
-  const [minPrice, setMinPrice] =
-    useState('')
-
-  const [selected, setSelected] =
-    useState<Listing | null>(null)
-
-  const [submitted, setSubmitted] =
-    useState<Offer | null>(null)
-
-  const [showMyOffers, setShowMyOffers] =
-    useState(false)
-
-  /*
-   * Every listing gets its price from the government API.
-   *
-   * There is deliberately NO fallback such as:
-   *
-   * price: 2650
-   *
-   * If API doesn't have the price, price = null.
-   */
+  // Farmer/quantity/quality still prototype data (govt API doesn't have
+  // per-farmer listings) — but price, where a real match exists, comes
+  // from live Maharashtra mandi data instead of the hardcoded number.
   const liveListings = useMemo(() => {
-    return listings.map((listing) => ({
-      ...listing,
-      price: getCropPrice(listing.crop),
-    }))
-  }, [getCropPrice, loading])
+    return listings.map((listing) => {
+      const commodity = CROP_TO_COMMODITY[listing.crop]
+      const realPrice = commodity ? mandiPrices[commodity] : undefined
 
-  const filtered = useMemo(() => {
-    return liveListings.filter((item) => {
-      const cropMatches =
-        cropFilter === 'All crops' ||
-        item.crop === cropFilter
-
-      const locationMatches =
-        locationFilter === 'All locations' ||
-        item.location.includes(
-          locationFilter,
-        )
-
-      const priceMatches =
-        !minPrice ||
-        (item.price != null &&
-          item.price >=
-            Number(minPrice))
-
-      return (
-        cropMatches &&
-        locationMatches &&
-        priceMatches
-      )
+      return realPrice
+        ? { ...listing, price: realPrice, isLive: true }
+        : { ...listing, isLive: false }
     })
-  }, [
-    liveListings,
-    cropFilter,
-    locationFilter,
-    minPrice,
-  ])
+  }, [mandiPrices])
 
-  const selectedPrice =
-    selected != null
-      ? getCropPrice(selected.crop)
-      : null
+  const filtered = useMemo(
+    () =>
+      liveListings.filter(
+        (item) =>
+          (cropFilter === 'All crops' || item.crop === cropFilter) &&
+          (locationFilter === 'All locations' ||
+            item.location === locationFilter) &&
+          (!minPrice || item.price >= Number(minPrice)),
+      ),
+    [liveListings, cropFilter, locationFilter, minPrice],
+  )
 
   return (
     <div className="space-y-8">
@@ -896,14 +585,10 @@ export function BuyerMarketplace({
         </div>
 
         <button
-          onClick={() =>
-            setShowMyOffers((value) => !value)
-          }
+          onClick={() => setShowMyOffers((v) => !v)}
           className="min-h-11 rounded-xl border border-primary px-4 text-sm font-bold text-primary"
         >
-          {showMyOffers
-            ? t.findBuyers
-            : t.myOffers}
+          {showMyOffers ? t.findBuyers : t.myOffers}
         </button>
       </div>
 
@@ -916,181 +601,124 @@ export function BuyerMarketplace({
         />
       ) : (
         <>
-          <section className="rounded-2xl border border-border bg-card p-4 shadow-sm">
-            <div className="grid gap-3 sm:grid-cols-3">
-              <label className="text-xs font-bold text-muted-foreground">
-                {t.filterCrop}
+      <section className="rounded-2xl border border-border bg-card p-4 shadow-sm">
+        <div className="grid gap-3 sm:grid-cols-3">
+          <label className="text-xs font-bold text-muted-foreground">
+            {t.filterCrop}
+            <select
+              value={cropFilter}
+              onChange={(e) => setCropFilter(e.target.value)}
+              className="mt-2 h-11 w-full rounded-xl border border-input bg-background px-3 text-sm text-foreground"
+            >
+              <option>All crops</option>
+              {crops.map((crop) => (
+                <option key={crop.name}>{crop.name}</option>
+              ))}
+            </select>
+          </label>
 
-                <select
-                  value={cropFilter}
-                  onChange={(e) =>
-                    setCropFilter(
-                      e.target.value,
-                    )
-                  }
-                  className="mt-2 h-11 w-full rounded-xl border border-input bg-background px-3 text-sm text-foreground"
-                >
-                  <option>
-                    All crops
-                  </option>
+          <label className="text-xs font-bold text-muted-foreground">
+            {t.filterLocation}
+            <select
+              value={locationFilter}
+              onChange={(e) => setLocationFilter(e.target.value)}
+              className="mt-2 h-11 w-full rounded-xl border border-input bg-background px-3 text-sm text-foreground"
+            >
+              <option>All locations</option>
+              {locations.map((location) => (
+                <option key={location.id}>{location.name}</option>
+              ))}
+            </select>
+          </label>
 
-                  {crops.map((crop) => (
-                    <option
-                      key={crop.name}
-                      value={crop.name}
-                    >
-                      {crop.name}
-                    </option>
-                  ))}
-                </select>
-              </label>
+          <label className="text-xs font-bold text-muted-foreground">
+            {t.minPrice}
+            <input
+              value={minPrice}
+              onChange={(e) => setMinPrice(e.target.value)}
+              placeholder="₹ / quintal"
+              type="number"
+              className="mt-2 h-11 w-full rounded-xl border border-input bg-background px-3 text-sm text-foreground"
+            />
+          </label>
+        </div>
+      </section>
 
-              <label className="text-xs font-bold text-muted-foreground">
-                {t.filterLocation}
+      {submitted && (
+        <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-5 text-emerald-900">
+          <div className="flex items-start gap-3">
+            <Check className="mt-0.5 size-5" />
 
-                <select
-                  value={locationFilter}
-                  onChange={(e) =>
-                    setLocationFilter(
-                      e.target.value,
-                    )
-                  }
-                  className="mt-2 h-11 w-full rounded-xl border border-input bg-background px-3 text-sm text-foreground"
-                >
-                  <option>
-                    All locations
-                  </option>
+            <div>
+              <h2 className="font-serif text-xl font-bold">
+                {t.offerSubmittedTitle}
+              </h2>
 
-                  {locations.map(
-                    (location) => (
-                      <option
-                        key={location.id}
-                        value={location.name}
-                      >
-                        {location.name}
-                      </option>
-                    ),
-                  )}
-                </select>
-              </label>
-
-              <label className="text-xs font-bold text-muted-foreground">
-                {t.minPrice}
-
-                <input
-                  value={minPrice}
-                  onChange={(e) =>
-                    setMinPrice(
-                      e.target.value,
-                    )
-                  }
-                  placeholder="₹ / quintal"
-                  type="number"
-                  className="mt-2 h-11 w-full rounded-xl border border-input bg-background px-3 text-sm text-foreground"
-                />
-              </label>
-            </div>
-          </section>
-
-          {mandiError && (
-            <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm font-semibold text-red-700">
-              Unable to fetch live mandi prices.
-              Please check the government API
-              connection.
-            </div>
-          )}
-
-          {submitted && (
-            <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-5 text-emerald-900">
-              <div className="flex items-start gap-3">
-                <Check className="mt-0.5 size-5" />
-
-                <div>
-                  <h2 className="font-serif text-xl font-bold">
-                    {t.offerSubmittedTitle}
-                  </h2>
-
-                  <p className="mt-1 text-sm">
-                    {submitted.buyer} ·{' '}
-                    {money(
-                      submitted.price,
-                    )}
-                    /q ·{' '}
-                    {submitted.quantity}{' '}
-                    quintals
-                  </p>
-
-                  <p className="mt-2 text-sm font-semibold">
-                    {t.pendingFarmerResponse}
-                  </p>
-                </div>
-              </div>
-            </div>
-          )}
-
-          <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
-            {filtered.map((listing) => (
-              <ListingCard
-                key={listing.id}
-                listing={listing}
-                price={listing.price}
-                loading={loading}
-                open={setSelected}
-              />
-            ))}
-          </div>
-
-          {filtered.length === 0 &&
-            !loading && (
-              <p className="rounded-2xl border border-dashed border-border bg-card p-6 text-center text-sm text-muted-foreground">
-                No live mandi price is available
-                for this crop/location from
-                the API.
+              <p className="mt-1 text-sm">
+                {submitted.buyer} · {money(submitted.price)}/q ·{' '}
+                {submitted.quantity} quintals
               </p>
-            )}
 
-          <BuyerCards />
+              <p className="mt-2 text-sm font-semibold">
+                {t.pendingFarmerResponse}
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
 
-          <section className="rounded-2xl bg-muted p-5 text-sm text-muted-foreground">
-            <p className="font-bold text-foreground">
-              Live mandi prices
-            </p>
+      <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
+        {filtered.map((listing) => (
+          <ListingCard
+            key={listing.id}
+            listing={listing}
+            open={setSelected}
+            isLive={listing.isLive}
+          />
+        ))}
+      </div>
 
-            <p className="mt-1">
-              Prices shown above are fetched
-              from the connected government
-              mandi API. No fallback price is
-              used when live data is unavailable.
-            </p>
-          </section>
+      {filtered.length === 0 && (
+        <p className="rounded-2xl border border-dashed border-border bg-card p-6 text-center text-sm text-muted-foreground">
+          No listings match this crop/location combination yet in the
+          prototype dataset.
+        </p>
+      )}
+
+      <BuyerCards />
+
+      <section className="rounded-2xl bg-muted p-5 text-sm text-muted-foreground">
+        <p className="font-bold text-foreground">Transparent offers</p>
+
+        <p className="mt-1">
+          You can always see the buyer name, offer price, quantity,
+          location, and status. All listings and buyers are sample
+          data for this prototype.
+        </p>
+      </section>
         </>
       )}
 
-      {selected &&
-        selectedPrice != null && (
-          <OfferModal
-            listing={selected}
-            price={selectedPrice}
-            close={() =>
-              setSelected(null)
-            }
-            submit={(offer) => {
-              setOffers((current) => [
-                ...current,
-                offer,
-              ])
-
-              setSubmitted(offer)
-              setSelected(null)
-            }}
-          />
-        )}
+      {selected && (
+        <OfferModal
+          listing={selected}
+          close={() => setSelected(null)}
+          submit={(offer) => {
+            // Buyer offer now joins the SAME shared offers list the
+            // farmer sees — no longer a dead-end banner. It renders
+            // through the exact same OfferCard as any other offer.
+            setOffers((current) => [...current, offer])
+            setSubmitted(offer)
+            setSelected(null)
+          }}
+        />
+      )}
     </div>
   )
 }
 
 /* -------------------------------------------------------------------------- */
-/* Buyer's offer status                                                       */
+/* Buyer's own offer status list (read-only — no accept/reject/negotiate)    */
 /* -------------------------------------------------------------------------- */
 
 function BuyerOfferStatusList({
@@ -1100,18 +728,13 @@ function BuyerOfferStatusList({
   goToLogistics,
 }: {
   offers: Offer[]
-  setOffers: React.Dispatch<
-    React.SetStateAction<Offer[]>
-  >
+  setOffers: React.Dispatch<React.SetStateAction<Offer[]>>
   goToGrading: (offerId: string) => void
   goToLogistics: () => void
 }) {
   const { t } = useLanguage()
 
-  const gradeLabels: Record<
-    QualityGrade,
-    string
-  > = {
+  const gradeLabels: Record<QualityGrade, string> = {
     A: t.gradeALabel,
     B: t.gradeBLabel,
     C: t.gradeCLabel,
@@ -1121,36 +744,23 @@ function BuyerOfferStatusList({
     setOffers((current) =>
       current.map((item) =>
         item.id === offer.id
-          ? {
-              ...item,
-              price:
-                offer.counterPrice ??
-                item.price,
-              status: 'Accepted',
-            }
+          ? { ...item, price: offer.counterPrice ?? item.price, status: 'Accepted' }
           : item,
       ),
     )
 
-  const rejectCounter = (
-    offerId: string,
-  ) =>
+  const rejectCounter = (offerId: string) =>
     setOffers((current) =>
       current.map((item) =>
-        item.id === offerId
-          ? {
-              ...item,
-              status: 'Rejected',
-            }
-          : item,
+        item.id === offerId ? { ...item, status: 'Rejected' } : item,
       ),
     )
 
   if (offers.length === 0) {
     return (
       <p className="rounded-2xl border border-dashed border-border bg-card p-6 text-center text-sm text-muted-foreground">
-        You haven't submitted any offers
-        yet in this prototype session.
+        You haven't submitted any offers yet in this prototype
+        session.
       </p>
     )
   }
@@ -1159,8 +769,7 @@ function BuyerOfferStatusList({
     <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
       {offers.map((offer) => {
         const hasCounter =
-          offer.counterPrice != null &&
-          offer.status === 'Pending'
+          offer.counterPrice != null && offer.status === 'Pending'
 
         return (
           <div
@@ -1174,11 +783,9 @@ function BuyerOfferStatusList({
 
               <Badge
                 tone={
-                  offer.status ===
-                  'Accepted'
+                  offer.status === 'Accepted'
                     ? 'green'
-                    : offer.status ===
-                        'Rejected'
+                    : offer.status === 'Rejected'
                       ? 'red'
                       : 'amber'
                 }
@@ -1188,38 +795,25 @@ function BuyerOfferStatusList({
             </div>
 
             <p className="mt-1 text-sm text-muted-foreground">
-              {offer.quantity} quintals ·{' '}
-              {money(offer.price)}/q
+              {offer.quantity} quintals · {money(offer.price)}/q
             </p>
 
             {hasCounter && (
               <div className="mt-3 space-y-3 rounded-xl bg-amber-50 p-3 text-xs text-amber-900">
                 <p className="font-bold">
-                  Farmer countered:{' '}
-                  {money(
-                    offer.counterPrice!,
-                  )}
-                  /q
+                  Farmer countered: {money(offer.counterPrice as number)}/q
                 </p>
 
                 <div className="flex gap-2">
                   <button
-                    onClick={() =>
-                      acceptCounter(
-                        offer,
-                      )
-                    }
+                    onClick={() => acceptCounter(offer)}
                     className="min-h-9 flex-1 rounded-lg bg-primary px-3 text-xs font-bold text-primary-foreground"
                   >
                     Accept Counter
                   </button>
 
                   <button
-                    onClick={() =>
-                      rejectCounter(
-                        offer.id,
-                      )
-                    }
+                    onClick={() => rejectCounter(offer.id)}
                     className="min-h-9 flex-1 rounded-lg border border-destructive px-3 text-xs font-bold text-destructive"
                   >
                     Reject
@@ -1228,66 +822,43 @@ function BuyerOfferStatusList({
               </div>
             )}
 
-            {offer.status ===
-              'Accepted' &&
-              !offer.grade && (
-                <div className="mt-3 space-y-2 rounded-lg bg-emerald-50 p-3 text-xs text-emerald-900">
-                  <p className="font-bold">
-                    Accepted — grade the
-                    produce and set the
-                    final price.
-                  </p>
-
-                  <button
-                    onClick={() =>
-                      goToGrading(
-                        offer.id,
-                      )
-                    }
-                    className="min-h-9 w-full rounded-lg bg-primary px-3 text-xs font-bold text-primary-foreground"
-                  >
-                    {t.gradeSetPriceBtn}
-                  </button>
-                </div>
-              )}
-
-            {offer.status ===
-              'Accepted' &&
-              offer.grade && (
-                <div className="mt-3 space-y-2 rounded-lg bg-emerald-50 p-3 text-xs text-emerald-900">
-                  <p className="font-bold">
-                    Graded{' '}
-                    {
-                      gradeLabels[
-                        offer.grade
-                      ]
-                    }{' '}
-                    · Final price{' '}
-                    {money(
-                      offer.finalPrice ??
-                        offer.price,
-                    )}
-                    /q
-                  </p>
-
-                  <button
-                    onClick={
-                      goToLogistics
-                    }
-                    className="min-h-9 w-full rounded-lg bg-primary px-3 text-xs font-bold text-primary-foreground"
-                  >
-                    {t.planTransportBtn}
-                  </button>
-                </div>
-              )}
-
-            {offer.status ===
-              'Rejected' && (
-                <p className="mt-3 text-xs font-semibold text-red-700">
-                  This offer was
-                  rejected.
+            {offer.status === 'Accepted' && !offer.grade && (
+              <div className="mt-3 space-y-2 rounded-lg bg-emerald-50 p-3 text-xs text-emerald-900">
+                <p className="font-bold">
+                  Accepted — grade the produce and set the final
+                  price.
                 </p>
-              )}
+
+                <button
+                  onClick={() => goToGrading(offer.id)}
+                  className="min-h-9 w-full rounded-lg bg-primary px-3 text-xs font-bold text-primary-foreground"
+                >
+                  {t.gradeSetPriceBtn}
+                </button>
+              </div>
+            )}
+
+            {offer.status === 'Accepted' && offer.grade && (
+              <div className="mt-3 space-y-2 rounded-lg bg-emerald-50 p-3 text-xs text-emerald-900">
+                <p className="font-bold">
+                  Graded {gradeLabels[offer.grade]} · Final price{' '}
+                  {money(offer.finalPrice ?? offer.price)}/q
+                </p>
+
+                <button
+                  onClick={goToLogistics}
+                  className="min-h-9 w-full rounded-lg bg-primary px-3 text-xs font-bold text-primary-foreground"
+                >
+                  {t.planTransportBtn}
+                </button>
+              </div>
+            )}
+
+            {offer.status === 'Rejected' && (
+              <p className="mt-3 text-xs font-semibold text-red-700">
+                This offer was rejected.
+              </p>
+            )}
           </div>
         )
       })}
@@ -1296,7 +867,7 @@ function BuyerOfferStatusList({
 }
 
 /* -------------------------------------------------------------------------- */
-/* Negotiate modal                                                            */
+/* Negotiate modal (farmer counters buyer's price)                           */
 /* -------------------------------------------------------------------------- */
 
 function NegotiateModal({
@@ -1306,35 +877,11 @@ function NegotiateModal({
 }: {
   offer: Offer
   close: () => void
-  sendCounter: (
-    counterPrice: number,
-  ) => void
+  sendCounter: (counterPrice: number) => void
 }) {
-  const [counterPrice, setCounterPrice] =
-    useState(
-      Math.round(
-        (offer.price +
-          offer.expected) /
-          2,
-      ),
-    )
-
-  const [error, setError] =
-    useState('')
-
-  const submit = () => {
-    if (
-      !Number.isFinite(counterPrice) ||
-      counterPrice <= 0
-    ) {
-      setError(
-        'Counter price must be greater than 0.',
-      )
-      return
-    }
-
-    sendCounter(counterPrice)
-  }
+  const [counterPrice, setCounterPrice] = useState(
+    Math.round((offer.price + offer.expected) / 2),
+  )
 
   return (
     <div
@@ -1345,10 +892,7 @@ function NegotiateModal({
       <div className="w-full max-w-md rounded-t-3xl bg-card p-6 shadow-2xl sm:rounded-3xl">
         <div className="flex items-start justify-between">
           <div>
-            <Badge tone="amber">
-              Negotiate
-            </Badge>
-
+            <Badge tone="amber">Negotiate</Badge>
             <h2 className="mt-3 font-serif text-2xl font-bold">
               Send a counter-offer
             </h2>
@@ -1364,45 +908,32 @@ function NegotiateModal({
         </div>
 
         <div className="mt-5 grid grid-cols-2 gap-4 rounded-2xl bg-muted p-4 text-sm">
-          <Info
-            label="Buyer offer"
-            value={`${money(
-              offer.price,
-            )}/q`}
-          />
+          <div>
+            <p className="text-xs text-muted-foreground">Buyer offer</p>
+            <p className="mt-1 font-bold">{money(offer.price)}/q</p>
+          </div>
 
-          <Info
-            label="Expected price"
-            value={`${money(
-              offer.expected,
-            )}/q`}
-          />
+          <div>
+            <p className="text-xs text-muted-foreground">
+              Your expected price
+            </p>
+            <p className="mt-1 font-bold">{money(offer.expected)}/q</p>
+          </div>
         </div>
 
         <label className="mt-5 block text-sm font-semibold">
           Your counter price (₹/quintal)
-
           <input
             className="mt-2 h-12 w-full rounded-xl border border-input bg-background px-3"
             type="number"
             min="1"
             value={counterPrice}
-            onChange={(e) =>
-              setCounterPrice(
-                Number(e.target.value),
-              )
-            }
+            onChange={(e) => setCounterPrice(Number(e.target.value))}
           />
         </label>
 
-        {error && (
-          <p className="mt-3 rounded-xl bg-red-50 p-3 text-sm font-semibold text-red-700">
-            {error}
-          </p>
-        )}
-
         <button
-          onClick={submit}
+          onClick={() => sendCounter(counterPrice)}
           className="mt-5 min-h-12 w-full rounded-xl bg-primary px-5 font-bold text-primary-foreground"
         >
           Send Counter-Offer
@@ -1413,7 +944,7 @@ function NegotiateModal({
 }
 
 /* -------------------------------------------------------------------------- */
-/* Grading screen                                                             */
+/* Grading screen (buyer grades quality + sets final price, post-accept)     */
 /* -------------------------------------------------------------------------- */
 
 export function GradingScreen({
@@ -1423,58 +954,25 @@ export function GradingScreen({
 }: {
   offer: Offer
   back: () => void
-  submit: (
-    grade: QualityGrade,
-    finalPrice: number,
-  ) => void
+  submit: (grade: QualityGrade, finalPrice: number) => void
 }) {
   const { t } = useLanguage()
+  const [grade, setGrade] = useState<QualityGrade>('A')
+  const [finalPrice, setFinalPrice] = useState(offer.price)
+  const [error, setError] = useState('')
 
-  const [grade, setGrade] =
-    useState<QualityGrade>('A')
-
-  const [finalPrice, setFinalPrice] =
-    useState(offer.price)
-
-  const [error, setError] =
-    useState('')
-
-  const gradeLabels: Record<
-    QualityGrade,
-    {
-      label: string
-      note: string
-    }
-  > = {
-    A: {
-      label: t.gradeALabel,
-      note: t.gradeANote,
-    },
-    B: {
-      label: t.gradeBLabel,
-      note: t.gradeBNote,
-    },
-    C: {
-      label: t.gradeCLabel,
-      note: t.gradeCNote,
-    },
+  const gradeLabels: Record<QualityGrade, { label: string; note: string }> = {
+    A: { label: t.gradeALabel, note: t.gradeANote },
+    B: { label: t.gradeBLabel, note: t.gradeBNote },
+    C: { label: t.gradeCLabel, note: t.gradeCNote },
   }
 
   const onSubmit = () => {
-    if (
-      !Number.isFinite(finalPrice) ||
-      finalPrice <= 0
-    ) {
-      setError(
-        'Final price must be greater than 0.',
-      )
-      return
+    if (finalPrice <= 0) {
+      return setError('Final price must be greater than 0.')
     }
 
-    submit(
-      grade,
-      finalPrice,
-    )
+    submit(grade, finalPrice)
   }
 
   return (
@@ -1501,26 +999,15 @@ export function GradingScreen({
 
       <section className="rounded-2xl border border-border bg-card p-5">
         <div className="grid grid-cols-2 gap-4 text-sm sm:grid-cols-4">
-          <Info
-            label="Buyer"
-            value={offer.buyer}
-          />
-
-          <Info
-            label="Crop"
-            value={offer.crop}
-          />
-
+          <Info label="Buyer" value={offer.buyer} />
+          <Info label="Crop" value={offer.crop} />
           <Info
             label="Quantity"
             value={`${offer.quantity} quintals`}
           />
-
           <Info
             label="Accepted price"
-            value={`${money(
-              offer.price,
-            )}/q`}
+            value={`${money(offer.price)}/q`}
           />
         </div>
       </section>
@@ -1531,38 +1018,22 @@ export function GradingScreen({
         </p>
 
         <div className="mt-3 grid gap-4 md:grid-cols-3">
-          {(
-            Object.keys(
-              gradeLabels,
-            ) as QualityGrade[]
-          ).map((key) => {
-            const selected =
-              grade === key
+          {(Object.keys(gradeLabels) as QualityGrade[]).map((key) => {
+            const isSelected = grade === key
 
             return (
               <button
                 key={key}
-                onClick={() =>
-                  setGrade(key)
-                }
-                className={`rounded-2xl border p-5 text-left transition ${
-                  selected
-                    ? 'border-primary bg-primary/10 ring-2 ring-primary/20'
-                    : 'border-border bg-card hover:border-primary/40'
-                }`}
+                onClick={() => setGrade(key)}
+                className={`rounded-2xl border p-5 text-left transition ${isSelected
+                  ? 'border-primary bg-primary/10 ring-2 ring-primary/20'
+                  : 'border-border bg-card hover:border-primary/40'
+                  }`}
               >
-                <h3 className="font-bold">
-                  {
-                    gradeLabels[key]
-                      .label
-                  }
-                </h3>
+                <h3 className="font-bold">{gradeLabels[key].label}</h3>
 
                 <p className="mt-2 text-sm text-muted-foreground">
-                  {
-                    gradeLabels[key]
-                      .note
-                  }
+                  {gradeLabels[key].note}
                 </p>
               </button>
             )
@@ -1573,26 +1044,17 @@ export function GradingScreen({
       <section className="rounded-2xl border border-border bg-card p-5">
         <label className="block text-sm font-semibold">
           {t.finalPriceLabel}
-
           <input
             className="mt-2 h-12 w-full rounded-xl border border-input bg-background px-3"
             type="number"
             min="1"
             value={finalPrice}
-            onChange={(e) =>
-              setFinalPrice(
-                Number(e.target.value),
-              )
-            }
+            onChange={(e) => setFinalPrice(Number(e.target.value))}
           />
         </label>
 
         <p className="mt-2 text-sm text-muted-foreground">
-          {t.totalAtPricePrefix}{' '}
-          {money(
-            finalPrice *
-              offer.quantity,
-          )}
+          {t.totalAtPricePrefix} {money(finalPrice * offer.quantity)}
         </p>
 
         {error && (
@@ -1613,7 +1075,7 @@ export function GradingScreen({
 }
 
 /* -------------------------------------------------------------------------- */
-/* Buyer contact                                                              */
+/* Buyer contact                                                             */
 /* -------------------------------------------------------------------------- */
 
 type BuyerContact = {
@@ -1622,56 +1084,33 @@ type BuyerContact = {
   address: string
 }
 
-const BUYER_CONTACTS: Record<
-  string,
-  BuyerContact
-> = {
+const BUYER_CONTACTS: Record<string, BuyerContact> = {
   'ABC Foods': {
     phone: '+91 98200 11223',
-    email:
-      'procurement@abcfoods.example',
-    address:
-      'Plot 14, MIDC, Nashik, Maharashtra',
+    email: 'procurement@abcfoods.example',
+    address: 'Plot 14, MIDC, Nashik, Maharashtra',
   },
-
   FreshMart: {
     phone: '+91 90210 44556',
-    email:
-      'buying@freshmart.example',
-    address:
-      'Warehouse 7, Market Yard, Pune, Maharashtra',
+    email: 'buying@freshmart.example',
+    address: 'Warehouse 7, Market Yard, Pune, Maharashtra',
   },
-
   AgroTrade: {
     phone: '+91 87650 99887',
-    email:
-      'sourcing@agrotrade.example',
-    address:
-      'Gate 2, APMC Complex, Sambhajinagar, Maharashtra',
+    email: 'sourcing@agrotrade.example',
+    address: 'Gate 2, APMC Complex, Sambhajinagar, Maharashtra',
   },
 }
 
-const DEFAULT_BUYER_CONTACT: BuyerContact =
-  {
-    phone: '+91 90000 00000',
-    email:
-      'contact@buyer.example',
-    address:
-      'Registered on KrishiSetu marketplace',
-  }
-
-function getBuyerContact(
-  buyerName: string,
-) {
-  return (
-    BUYER_CONTACTS[buyerName] ??
-    DEFAULT_BUYER_CONTACT
-  )
+const DEFAULT_BUYER_CONTACT: BuyerContact = {
+  phone: '+91 90000 00000',
+  email: 'contact@buyer.example',
+  address: 'Registered on KrishiSetu marketplace',
 }
 
-/* -------------------------------------------------------------------------- */
-/* Contact buyer                                                              */
-/* -------------------------------------------------------------------------- */
+function getBuyerContact(buyerName: string): BuyerContact {
+  return BUYER_CONTACTS[buyerName] ?? DEFAULT_BUYER_CONTACT
+}
 
 export function ContactBuyer({
   offer,
@@ -1682,12 +1121,7 @@ export function ContactBuyer({
   back: () => void
   goToLogistics: () => void
 }) {
-  const contact =
-    getBuyerContact(offer.buyer)
-
-  const agreedPrice =
-    offer.finalPrice ??
-    offer.price
+  const contact = getBuyerContact(offer.buyer)
 
   return (
     <div className="space-y-7">
@@ -1713,28 +1147,19 @@ export function ContactBuyer({
 
       <section className="rounded-2xl border border-border bg-card p-5">
         <div className="grid grid-cols-2 gap-4 text-sm sm:grid-cols-4">
-          <Info
-            label="Crop"
-            value={offer.crop}
-          />
-
+          <Info label="Crop" value={offer.crop} />
           <Info
             label="Quantity"
             value={`${offer.quantity} quintals`}
           />
-
           <Info
             label="Agreed price"
-            value={`${money(
-              agreedPrice,
-            )}/q`}
+            value={`${money(offer.finalPrice ?? offer.price)}/q`}
           />
-
           <Info
             label="Total value"
             value={money(
-              agreedPrice *
-                offer.quantity,
+              (offer.finalPrice ?? offer.price) * offer.quantity,
             )}
           />
         </div>
@@ -1748,32 +1173,25 @@ export function ContactBuyer({
         <div className="mt-4 space-y-4">
           <div className="flex items-center gap-3">
             <Phone className="size-5 text-primary" />
-            <span className="font-bold">
-              {contact.phone}
-            </span>
+            <span className="font-bold">{contact.phone}</span>
           </div>
 
           <div className="flex items-center gap-3">
             <span className="flex size-5 items-center justify-center text-primary">
               @
             </span>
-
-            <span>
-              {contact.email}
-            </span>
+            <span>{contact.email}</span>
           </div>
 
           <div className="flex items-center gap-3">
             <MapPin className="size-5 text-primary" />
-
-            <span>
-              {contact.address}
-            </span>
+            <span>{contact.address}</span>
           </div>
         </div>
 
         <p className="mt-5 rounded-xl bg-muted p-3 text-xs text-muted-foreground">
-          Prototype contact details.
+          Prototype contact details — no real buyer is reachable at
+          this number.
         </p>
       </section>
 
@@ -1788,7 +1206,7 @@ export function ContactBuyer({
 }
 
 /* -------------------------------------------------------------------------- */
-/* Farmer offer card                                                          */
+/* Offer card                                                                */
 /* -------------------------------------------------------------------------- */
 
 function OfferCard({
@@ -1797,7 +1215,6 @@ function OfferCard({
   reject,
   openNegotiate,
   goToLogistics,
-  goToGrading,
   goToContact,
 }: {
   offer: Offer
@@ -1805,20 +1222,15 @@ function OfferCard({
   reject: () => void
   openNegotiate: () => void
   goToLogistics: () => void
-  goToGrading: () => void
   goToContact: () => void
 }) {
   const { t } = useLanguage()
 
-  const gradeLabels: Record<
-    QualityGrade,
-    string
-  > = {
+  const gradeLabels: Record<QualityGrade, string> = {
     A: t.gradeALabel,
     B: t.gradeBLabel,
     C: t.gradeCLabel,
   }
-
   const tone =
     offer.status === 'Accepted'
       ? 'green'
@@ -1826,9 +1238,7 @@ function OfferCard({
         ? 'red'
         : 'amber'
 
-  const diff =
-    offer.price -
-    offer.expected
+  const diff = offer.price - offer.expected
 
   return (
     <article className="rounded-2xl border border-border bg-card p-5 shadow-sm">
@@ -1839,174 +1249,109 @@ function OfferCard({
           </h2>
 
           <p className="mt-1 text-sm text-muted-foreground">
-            Prototype Buyer ·{' '}
-            {offer.location}
+            Prototype Buyer · {offer.location}
           </p>
         </div>
 
-        <Badge tone={tone}>
-          {offer.status}
-        </Badge>
+        <Badge tone={tone}>{offer.status}</Badge>
       </div>
 
       <div className="mt-5 grid grid-cols-2 gap-4 border-y border-border py-4 text-sm">
-        <Info
-          label="Crop"
-          value={offer.crop}
-        />
-
+        <Info label="Crop" value={offer.crop} />
         <Info
           label="Quantity"
           value={`${offer.quantity} quintals`}
         />
-
-        <Info
-          label="Offer"
-          value={`${money(
-            offer.price,
-          )}/q`}
-        />
-
+        <Info label="Offer" value={`${money(offer.price)}/q`} />
         <Info
           label="Expected"
-          value={`${money(
-            offer.expected,
-          )}/q`}
+          value={`${money(offer.expected)}/q`}
         />
-
         <Info
           label="Difference"
-          value={`${
-            diff >= 0 ? '+' : '-'
-          }${money(
+          value={`${diff >= 0 ? '+' : '-'}${money(
             Math.abs(diff),
           )}/q`}
         />
-
         <Info
           label="Total offer value"
-          value={money(
-            offer.price *
-              offer.quantity,
-          )}
+          value={money(offer.price * offer.quantity)}
         />
       </div>
 
-      {offer.counterPrice !=
-        null &&
-        offer.status ===
-          'Pending' && (
-          <div className="mt-4 rounded-xl bg-amber-50 p-4 text-sm text-amber-900">
-            <p className="font-bold">
-              Counter-offer sent:{' '}
-              {money(
-                offer.counterPrice,
-              )}
-              /q
-            </p>
+      {offer.counterPrice != null && offer.status === 'Pending' && (
+        <div className="mt-4 rounded-xl bg-amber-50 p-4 text-sm text-amber-900">
+          <p className="font-bold">
+            Counter-offer sent: {money(offer.counterPrice)}/q
+          </p>
+
+          <p className="mt-1">
+            Waiting for the buyer to respond. This is a prototype —
+            no real message is sent to a buyer.
+          </p>
+        </div>
+      )}
+
+      {offer.status === 'Accepted' && !offer.grade && (
+        <div className="mt-4 space-y-3 rounded-xl bg-emerald-50 p-4 text-sm text-emerald-900">
+          <div>
+            <p className="font-bold">{t.offerAcceptedTitle}</p>
 
             <p className="mt-1">
-              Waiting for the buyer to
-              respond.
+              {t.offerAcceptedGradeNote}
             </p>
           </div>
-        )}
 
-      {offer.status ===
-        'Accepted' &&
-        !offer.grade && (
-          <div className="mt-4 space-y-3 rounded-xl bg-emerald-50 p-4 text-sm text-emerald-900">
-            <div>
-              <p className="font-bold">
-                {t.offerAcceptedTitle}
-              </p>
+          <button
+            onClick={goToContact}
+            className="mt-3 min-h-11 w-full rounded-xl border border-primary px-4 text-sm font-bold text-primary"
+          >
+            Contact Buyer
+          </button>
+        </div>
+      )}
 
-              <p className="mt-1">
-                {t.offerAcceptedGradeNote}
-              </p>
-            </div>
-
-            <div className="flex gap-2">
-              <button
-                onClick={
-                  goToGrading
-                }
-                className="min-h-11 flex-1 rounded-xl bg-primary px-4 text-sm font-bold text-primary-foreground"
-              >
-                {t.gradeSetPriceBtn}
-              </button>
-
-              <button
-                onClick={
-                  goToContact
-                }
-                className="min-h-11 flex-1 rounded-xl border border-primary px-4 text-sm font-bold text-primary"
-              >
-                Contact Buyer
-              </button>
-            </div>
-          </div>
-        )}
-
-      {offer.status ===
-        'Accepted' &&
-        offer.grade && (
-          <div className="mt-4 space-y-3 rounded-xl bg-emerald-50 p-4 text-sm text-emerald-900">
-            <div className="flex items-center justify-between">
-              <p className="font-bold">
-                {
-                  gradeLabels[
-                    offer.grade
-                  ]
-                }
-              </p>
-
-              <p className="font-bold">
-                {money(
-                  offer.finalPrice ??
-                    offer.price,
-                )}
-                /q
-              </p>
-            </div>
-
-            <p>
-              {t.gradedByBuyerNote}
+      {offer.status === 'Accepted' && offer.grade && (
+        <div className="mt-4 space-y-3 rounded-xl bg-emerald-50 p-4 text-sm text-emerald-900">
+          <div className="flex items-center justify-between">
+            <p className="font-bold">
+              {gradeLabels[offer.grade]}
             </p>
 
-            <div className="flex gap-2">
-              <button
-                onClick={
-                  goToLogistics
-                }
-                className="min-h-11 flex-1 rounded-xl bg-primary px-4 text-sm font-bold text-primary-foreground"
-              >
-                {t.planTransportBtn}
-              </button>
-
-              <button
-                onClick={
-                  goToContact
-                }
-                className="min-h-11 flex-1 rounded-xl border border-primary px-4 text-sm font-bold text-primary"
-              >
-                Contact Buyer
-              </button>
-            </div>
+            <p className="font-bold">
+              {money(offer.finalPrice ?? offer.price)}/q
+            </p>
           </div>
-        )}
 
-      {offer.status ===
-        'Rejected' && (
+          <p>
+            {t.gradedByBuyerNote}
+          </p>
+
+          <div className="flex gap-2">
+            <button
+              onClick={goToLogistics}
+              className="min-h-11 flex-1 rounded-xl bg-primary px-4 text-sm font-bold text-primary-foreground"
+            >
+              {t.planTransportBtn}
+            </button>
+
+            <button
+              onClick={goToContact}
+              className="min-h-11 flex-1 rounded-xl border border-primary px-4 text-sm font-bold text-primary"
+            >
+              Contact Buyer
+            </button>
+          </div>
+        </div>
+      )}
+
+      {offer.status === 'Rejected' && (
         <p className="mt-4 text-sm font-semibold text-red-700">
-          Offer rejected. You can
-          continue viewing other
-          offers.
+          Offer rejected. You can continue viewing other offers.
         </p>
       )}
 
-      {offer.status ===
-        'Pending' && (
+      {offer.status === 'Pending' && (
         <div className="mt-4 flex flex-wrap gap-3">
           <button
             onClick={accept}
@@ -2035,7 +1380,7 @@ function OfferCard({
 }
 
 /* -------------------------------------------------------------------------- */
-/* Farmer offers                                                              */
+/* Farmer offers                                                             */
 /* -------------------------------------------------------------------------- */
 
 export function FarmerOffers({
@@ -2044,13 +1389,10 @@ export function FarmerOffers({
   openMarketplace,
   context,
   goToLogistics,
-  goToGrading,
   goToContact,
 }: {
   offers: Offer[]
-  setOffers: React.Dispatch<
-    React.SetStateAction<Offer[]>
-  >
+  setOffers: React.Dispatch<React.SetStateAction<Offer[]>>
   openMarketplace: () => void
   context: {
     crop: string
@@ -2061,144 +1403,74 @@ export function FarmerOffers({
     netReturn: number
   }
   goToLogistics: () => void
-  goToGrading: (offerId: string) => void
   goToContact: (offerId: string) => void
 }) {
   const { t } = useLanguage()
 
-  /*
-   * IMPORTANT:
-   * Farmer offers also use the API price.
-   *
-   * No 2700 / 2650 / 2750 hardcoded values.
-   */
-  const {
-    loading,
-    getCropPrice,
-  } = useMandiPrices()
+  // Demo buyers shown until real offers come in from BuyerMarketplace.
+  // Each gets its own OfferCard (accept/negotiate/reject) — not just a
+  // read-only comparison row — so any of the three can be acted on.
+  const defaultOffers: Offer[] = [
+    {
+      id: 'demo-abc-foods',
+      buyer: 'ABC Foods',
+      crop: context.crop,
+      quantity: context.quantity,
+      price: 2700,
+      expected: context.marketPrice,
+      location: context.location,
+      status: 'Pending',
+    },
+    {
+      id: 'demo-freshmart',
+      buyer: 'FreshMart',
+      crop: context.crop,
+      quantity: context.quantity,
+      price: 2650,
+      expected: context.marketPrice,
+      location: context.location,
+      status: 'Pending',
+    },
+    {
+      id: 'demo-agrotrade',
+      buyer: 'AgroTrade',
+      crop: context.crop,
+      quantity: 15,
+      price: 2750,
+      expected: context.marketPrice,
+      location: context.location,
+      status: 'Pending',
+    },
+  ]
 
-  const liveMarketPrice =
-    getCropPrice(context.crop)
+  // Buyer-submitted offers (from BuyerMarketplace) and the demo
+  // fallback both render through the exact same OfferCard.
+  const shown = offers.length ? offers : defaultOffers
 
-  const [negotiatingId, setNegotiatingId] =
-    useState<string | null>(null)
+  const [negotiatingId, setNegotiatingId] = useState<string | null>(
+    null,
+  )
 
-  /*
-   * Demo buyer offers are calculated from the
-   * LIVE API price.
-   *
-   * The multipliers create different demo offers
-   * without hardcoding a rupee amount.
-   */
-  const defaultOffers = useMemo(() => {
-    if (liveMarketPrice == null) {
-      return []
-    }
-
-    return [
-      {
-        id: 'demo-abc-foods',
-        buyer: 'ABC Foods',
-        crop: context.crop,
-        quantity: context.quantity,
-        price: Math.round(
-          liveMarketPrice * 1.02,
-        ),
-        expected: liveMarketPrice,
-        location: context.location,
-        status:
-          'Pending' as OfferStatus,
-      },
-
-      {
-        id: 'demo-freshmart',
-        buyer: 'FreshMart',
-        crop: context.crop,
-        quantity: context.quantity,
-        price: Math.round(
-          liveMarketPrice * 0.99,
-        ),
-        expected: liveMarketPrice,
-        location: context.location,
-        status:
-          'Pending' as OfferStatus,
-      },
-
-      {
-        id: 'demo-agrotrade',
-        buyer: 'AgroTrade',
-        crop: context.crop,
-        quantity: Math.min(
-          15,
-          context.quantity,
-        ),
-        price: Math.round(
-          liveMarketPrice * 1.04,
-        ),
-        expected: liveMarketPrice,
-        location: context.location,
-        status:
-          'Pending' as OfferStatus,
-      },
-    ]
-  }, [
-    liveMarketPrice,
-    context.crop,
-    context.quantity,
-    context.location,
-  ])
-
-  const shown =
-    offers.length > 0
-      ? offers
-      : defaultOffers
-
-  const update = (
-    id: string,
-    status: OfferStatus,
-  ) => {
+  // Seed the FULL demo set on first action, not just the one offer
+  // acted on — otherwise accepting/negotiating one demo buyer would
+  // wipe the other two off the screen.
+  const update = (id: string, status: OfferStatus) =>
     setOffers((current) =>
-      (
-        current.length
-          ? current
-          : defaultOffers
-      ).map((item) =>
-        item.id === id
-          ? {
-              ...item,
-              status,
-            }
-          : item,
+      (current.length ? current : defaultOffers).map((item) =>
+        item.id === id ? { ...item, status } : item,
       ),
     )
-  }
 
-  const sendCounter = (
-    id: string,
-    counterPrice: number,
-  ) => {
+  const sendCounter = (id: string, counterPrice: number) =>
     setOffers((current) =>
-      (
-        current.length
-          ? current
-          : defaultOffers
-      ).map((item) =>
-        item.id === id
-          ? {
-              ...item,
-              counterPrice,
-            }
-          : item,
+      (current.length ? current : defaultOffers).map((item) =>
+        item.id === id ? { ...item, counterPrice } : item,
       ),
     )
-  }
 
-  const negotiatingOffer =
-    shown.find(
-      (offer) =>
-        offer.id ===
-        negotiatingId,
-    )
+  const negotiatingOffer = shown.find(
+    (offer) => offer.id === negotiatingId,
+  )
 
   return (
     <div className="space-y-7">
@@ -2226,184 +1498,85 @@ export function FarmerOffers({
       </div>
 
       <section className="rounded-2xl border border-border bg-card p-5 shadow-sm">
-        <p className="text-sm font-bold">
-          {t.currentContextTitle}
-        </p>
+        <p className="text-sm font-bold">{t.currentContextTitle}</p>
 
         <div className="mt-4 grid grid-cols-2 gap-4 text-sm md:grid-cols-5">
-          <Info
-            label="Crop"
-            value={context.crop}
-          />
-
+          <Info label="Crop" value={context.crop} />
           <Info
             label="Quantity"
             value={`${context.quantity} quintals`}
           />
-
+          <Info label="Best market" value={context.market} />
           <Info
-            label="Best market"
-            value={context.market}
+            label="Market price"
+            value={`${money(context.marketPrice)}/q`}
           />
-
-          <Info
-            label="Live market price"
-            value={
-              loading
-                ? 'Loading...'
-                : liveMarketPrice !=
-                    null
-                  ? `${money(
-                      liveMarketPrice,
-                    )}/q`
-                  : 'Not available'
-            }
-          />
-
           <Info
             label="Expected net return"
-            value={
-              liveMarketPrice !=
-              null
-                ? money(
-                    liveMarketPrice *
-                      context.quantity,
-                  )
-                : 'Not available'
-            }
+            value={money(context.netReturn)}
           />
         </div>
       </section>
-
-      {liveMarketPrice == null &&
-        !loading && (
-          <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm font-semibold text-red-700">
-            Live mandi price for{' '}
-            {context.crop} is not
-            available from the government
-            API. No hardcoded price is being
-            used.
-          </div>
-        )}
 
       <div className="grid gap-5 lg:grid-cols-2">
         {shown.map((offer) => (
           <OfferCard
             key={offer.id}
             offer={offer}
-            accept={() =>
-              update(
-                offer.id,
-                'Accepted',
-              )
-            }
-            reject={() =>
-              update(
-                offer.id,
-                'Rejected',
-              )
-            }
-            openNegotiate={() =>
-              setNegotiatingId(
-                offer.id,
-              )
-            }
-            goToLogistics={
-              goToLogistics
-            }
-            goToGrading={() =>
-              goToGrading(
-                offer.id,
-              )
-            }
-            goToContact={() =>
-              goToContact(
-                offer.id,
-              )
-            }
+            accept={() => update(offer.id, 'Accepted')}
+            reject={() => update(offer.id, 'Rejected')}
+            openNegotiate={() => setNegotiatingId(offer.id)}
+            goToLogistics={goToLogistics}
+            goToContact={() => goToContact(offer.id)}
           />
         ))}
       </div>
 
-      {shown.length === 0 &&
-        !loading && (
-          <p className="rounded-2xl border border-dashed border-border bg-card p-6 text-center text-sm text-muted-foreground">
-            No live mandi price is
-            available for this crop.
-          </p>
-        )}
+      <section className="rounded-2xl border border-border bg-card p-5">
+        <h2 className="font-serif text-xl font-bold">
+          {t.offerComparisonTitle}
+        </h2>
 
-      {shown.length > 0 && (
-        <section className="rounded-2xl border border-border bg-card p-5">
-          <h2 className="font-serif text-xl font-bold">
-            {t.offerComparisonTitle}
-          </h2>
+        <div className="mt-4 grid gap-3 sm:grid-cols-3">
+          {[
+            { buyer: 'ABC Foods', price: 2700, quantity: context.quantity },
+            { buyer: 'FreshMart', price: 2650, quantity: context.quantity },
+            { buyer: 'AgroTrade', price: 2750, quantity: 15 },
+          ].map((item, index) => (
+            <div
+              key={item.buyer}
+              className={`rounded-xl p-4 ${index === 0 ? 'bg-accent/20 ring-1 ring-accent' : 'bg-muted'
+                }`}
+            >
+              <div className="flex justify-between gap-2">
+                <p className="font-bold">{item.buyer}</p>
+                {index === 0 && <Badge>Best offer</Badge>}
+              </div>
 
-          <div className="mt-4 grid gap-3 sm:grid-cols-3">
-            {shown.map(
-              (item, index) => (
-                <div
-                  key={item.id}
-                  className={`rounded-xl p-4 ${
-                    index === 0
-                      ? 'bg-accent/20 ring-1 ring-accent'
-                      : 'bg-muted'
-                  }`}
-                >
-                  <div className="flex justify-between gap-2">
-                    <p className="font-bold">
-                      {item.buyer}
-                    </p>
+              <p className="mt-3 font-serif text-xl font-bold text-primary">
+                {money(item.price)}/q
+              </p>
 
-                    {index === 0 && (
-                      <Badge>
-                        Best offer
-                      </Badge>
-                    )}
-                  </div>
+              <p className="mt-1 text-sm text-muted-foreground">
+                {item.quantity} q ·{' '}
+                {money(item.price * item.quantity)} total
+              </p>
+            </div>
+          ))}
+        </div>
 
-                  <p className="mt-3 font-serif text-xl font-bold text-primary">
-                    {money(
-                      item.price,
-                    )}
-                    /q
-                  </p>
-
-                  <p className="mt-1 text-sm text-muted-foreground">
-                    {item.quantity} q ·{' '}
-                    {money(
-                      item.price *
-                        item.quantity,
-                    )}{' '}
-                    total
-                  </p>
-                </div>
-              ),
-            )}
-          </div>
-
-          <p className="mt-4 text-xs text-muted-foreground">
-            Offer prices are calculated from
-            the current live mandi price
-            returned by the API.
-          </p>
-        </section>
-      )}
+        <p className="mt-4 text-xs text-muted-foreground">
+          Price is only one factor. Consider quantity, location,
+          buyer information, and status before deciding.
+        </p>
+      </section>
 
       {negotiatingOffer && (
         <NegotiateModal
           offer={negotiatingOffer}
-          close={() =>
-            setNegotiatingId(null)
-          }
-          sendCounter={(
-            counterPrice,
-          ) => {
-            sendCounter(
-              negotiatingOffer.id,
-              counterPrice,
-            )
-
+          close={() => setNegotiatingId(null)}
+          sendCounter={(counterPrice) => {
+            sendCounter(negotiatingOffer.id, counterPrice)
             setNegotiatingId(null)
           }}
         />
@@ -2412,16 +1585,9 @@ export function FarmerOffers({
   )
 }
 
-/* -------------------------------------------------------------------------- */
-/* Shared offers state                                                        */
-/* -------------------------------------------------------------------------- */
-
 export function useMarketplaceOffers() {
   return useState<Offer[]>([])
 }
 
-/* -------------------------------------------------------------------------- */
-/* Export listings                                                            */
-/* -------------------------------------------------------------------------- */
 
 export { listings }

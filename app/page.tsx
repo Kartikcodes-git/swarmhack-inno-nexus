@@ -1093,7 +1093,7 @@ function Transparency() {
       'Previously synchronized information for offline mode.',
     ],
     [
-      'Prototype Forecast',
+      'Market Forecast and Design Engine',
       'Illustrative, not guaranteed.',
     ],
     [
@@ -2196,7 +2196,7 @@ function Trends({
         onClick={openForecast}
         className="min-h-12 rounded-xl bg-primary px-5 text-sm font-bold text-primary-foreground"
       >
-        Open Prototype Forecast
+        Open Market Forecast and Design Engine
       </button>
     </div>
   )
@@ -2268,7 +2268,7 @@ function Forecast({
         </div>
 
         <span className="rounded-full border border-accent bg-accent/20 px-3 py-1 text-xs font-bold text-accent-foreground">
-          Prototype Forecast
+          Market Forecast and Design Engine
         </span>
       </div>
 
@@ -2659,13 +2659,20 @@ export default function Page() {
   const activeMarket = selectedMarket ?? topRecommendation
 
   const navigate = (next: View) => {
-    setView(next)
+    // Buyers should only access buyer marketplace, grading and logistics.
+    // Farmers keep the market-analysis and buyer-offer workflow.
+    const buyerAllowed: View[] = ['marketplace', 'grading', 'logistics', 'transport-confirmed']
+    if (role === 'buyer' && !buyerAllowed.includes(next)) {
+      setView('marketplace')
+    } else {
+      setView(next)
+    }
     setMobileMenu(false)
   }
 
   const demo = () => {
-    setView('dashboard')
     setRole('farmer')
+    setView('dashboard')
     setPhone('demo')
     setFarmerName('')
     setBuyerName('')
@@ -2716,7 +2723,7 @@ export default function Page() {
     )
 
     setGradingOfferId(null)
-    setView('offers')
+    setView('logistics')
   }
 
   const compare = () => {
@@ -2771,7 +2778,10 @@ export default function Page() {
     return (
       <Login
         role={role}
-        onVerified={setPhone}
+        onVerified={(verifiedPhone) => {
+          setPhone(verifiedPhone)
+          setView(role === 'buyer' ? 'marketplace' : 'dashboard')
+        }}
         onFarmerName={setFarmerName}
         onBuyerDetails={(name, businessName) => {
           setBuyerName(name)
@@ -2953,7 +2963,7 @@ export default function Page() {
                   activeMarket.revenue.transportCost
                 }
                 onBack={() =>
-                  setView('dashboard')
+                  setView(role === 'buyer' ? 'marketplace' : 'dashboard')
                 }
                 onConfirmTransport={(payload) => {
                   setTransportCost(payload.totalCost)
@@ -2963,7 +2973,7 @@ export default function Page() {
               />
             ) : (
               <EmptyState
-                back={() => setView('dashboard')}
+                back={() => setView(role === 'buyer' ? 'marketplace' : 'dashboard')}
               />
             ))}
 
@@ -2985,7 +2995,7 @@ export default function Page() {
                 pickupDate={transportConfirmation.pickupDate}
                 pickupTime={transportConfirmation.pickupTime}
                 driverContact={transportConfirmation.driverContact}
-                done={() => setView('dashboard')}
+                done={() => setView(role === 'buyer' ? 'marketplace' : 'dashboard')}
               />
             )}
 
@@ -3031,7 +3041,6 @@ export default function Page() {
               goToLogistics={() =>
                 setView('logistics')
               }
-              goToGrading={goToGrading}
               goToContact={goToContact}
             />
           )}
@@ -3053,7 +3062,7 @@ export default function Page() {
             (gradingOffer ? (
               <GradingScreen
                 offer={gradingOffer}
-                back={() => setView('offers')}
+                back={() => setView(role === 'buyer' ? 'marketplace' : 'offers')}
                 submit={submitGrading}
               />
             ) : (
