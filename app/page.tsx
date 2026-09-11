@@ -383,21 +383,34 @@ function DemoSteps({ view }: { view: View }) {
 /* -------------------------------------------------------------------------- */
 
 function Login({
+  role,
   onVerified,
+  onFarmerName,
+  onBuyerDetails,
 }: {
+  role: 'farmer' | 'buyer'
   onVerified: (phone: string) => void
+  onFarmerName: (name: string) => void
+  onBuyerDetails: (name: string, businessName: string) => void
 }) {
   const [phone, setPhone] = useState('')
   const [otp, setOtp] = useState('')
   const [sentOtp, setSentOtp] = useState<string | null>(null)
-
+  const [farmerName, setLocalFarmerName] = useState('')
+  const [buyerName, setBuyerName] = useState('')
+  const [businessName, setBusinessName] = useState('')
   const [farmerId, setFarmerId] = useState<File | null>(null)
   const [qualityCertificate, setQualityCertificate] = useState<File | null>(null)
-
   const [error, setError] = useState('')
 
   const isValidPhone = /^\d{10}$/.test(phone)
   const isValidOtp = /^\d{4}$/.test(otp)
+
+  const isValidFarmerDetails =
+    farmerName.trim().length > 0 && farmerId !== null
+
+  const isValidBuyerDetails =
+    buyerName.trim().length > 0 && businessName.trim().length > 0
 
   function sendOtp() {
     if (!isValidPhone) {
@@ -405,16 +418,27 @@ function Login({
       return
     }
 
-    if (!farmerId) {
-      setError(
-        'Please upload your Digital Farmer ID (Kisan Pehchan Patra)',
-      )
+    if (role === 'farmer' && !isValidFarmerDetails) {
+      if (!farmerName.trim()) {
+        setError('Please enter your name')
+      } else {
+        setError('Please upload your Digital Farmer ID (Kisan Pehchan Patra)')
+      }
+      return
+    }
+
+    if (role === 'buyer' && !isValidBuyerDetails) {
+      if (!buyerName.trim()) {
+        setError('Please enter your name')
+      } else {
+        setError('Please enter your business or organization name')
+      }
       return
     }
 
     setError('')
 
-    // Demo OTP
+    // Demo OTP — shown on screen for the prototype.
     const generated = String(
       Math.floor(1000 + Math.random() * 9000),
     )
@@ -430,6 +454,13 @@ function Login({
     }
 
     setError('')
+
+    if (role === 'farmer') {
+      onFarmerName(farmerName.trim())
+    } else {
+      onBuyerDetails(buyerName.trim(), businessName.trim())
+    }
+
     onVerified(phone)
   }
 
@@ -443,9 +474,8 @@ function Login({
         <div className="rounded-3xl border border-border bg-card p-7 shadow-sm">
           <div className="flex items-center justify-center gap-2">
             <ShieldCheck className="size-5 text-primary" />
-
             <h1 className="font-serif text-2xl font-bold">
-              Log in
+              {role === 'farmer' ? 'Farmer Login' : 'Buyer Login'}
             </h1>
           </div>
 
@@ -455,162 +485,183 @@ function Login({
 
           {!sentOtp ? (
             <>
-              {/* Mobile Number */}
-              <label className="mt-6 block space-y-2">
+              {role === 'farmer' ? (
+                <label className="mt-6 block space-y-2">
+                  <span className="text-sm font-semibold">
+                    Farmer name <span className="text-destructive">*</span>
+                  </span>
+                  <input
+                    type="text"
+                    value={farmerName}
+                    onChange={(e) => {
+                      setLocalFarmerName(e.target.value)
+                      setError('')
+                    }}
+                    placeholder="Enter your full name"
+                    className="h-12 w-full rounded-xl border border-input bg-background px-3"
+                  />
+                </label>
+              ) : (
+                <>
+                  <label className="mt-6 block space-y-2">
+                    <span className="text-sm font-semibold">
+                      Buyer name <span className="text-destructive">*</span>
+                    </span>
+                    <input
+                      type="text"
+                      value={buyerName}
+                      onChange={(e) => {
+                        setBuyerName(e.target.value)
+                        setError('')
+                      }}
+                      placeholder="Enter your full name"
+                      className="h-12 w-full rounded-xl border border-input bg-background px-3"
+                    />
+                  </label>
+
+                  <label className="mt-5 block space-y-2">
+                    <span className="text-sm font-semibold">
+                      Business / Organization name{' '}
+                      <span className="text-destructive">*</span>
+                    </span>
+                    <input
+                      type="text"
+                      value={businessName}
+                      onChange={(e) => {
+                        setBusinessName(e.target.value)
+                        setError('')
+                      }}
+                      placeholder="Enter business or organization name"
+                      className="h-12 w-full rounded-xl border border-input bg-background px-3"
+                    />
+                  </label>
+                </>
+              )}
+
+              <label className="mt-5 block space-y-2">
                 <span className="text-sm font-semibold">
-                  Mobile number{' '}
-                  <span className="text-destructive">*</span>
+                  Mobile number <span className="text-destructive">*</span>
                 </span>
 
                 <div className="relative">
                   <Phone className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-
                   <input
                     type="tel"
                     inputMode="numeric"
                     maxLength={10}
                     value={phone}
-                    onChange={(e) =>
-                      setPhone(
-                        e.target.value
-                          .replace(/\D/g, '')
-                          .slice(0, 10),
-                      )
-                    }
+                    onChange={(e) => {
+                      setPhone(e.target.value.replace(/\D/g, '').slice(0, 10))
+                      setError('')
+                    }}
                     placeholder="10-digit mobile number"
                     className="h-12 w-full rounded-xl border border-input bg-background pl-9 pr-3"
                   />
                 </div>
               </label>
 
-              {/* Digital Farmer ID - REQUIRED */}
-              <label className="mt-5 block space-y-2">
-                <span className="text-sm font-semibold">
-                  Upload ID{' '}
-                  <span className="text-destructive">*</span>
-                </span>
+              {role === 'farmer' && (
+                <>
+                  <label className="mt-5 block space-y-2">
+                    <span className="text-sm font-semibold">
+                      Upload ID <span className="text-destructive">*</span>
+                    </span>
+                    <span className="block text-xs text-muted-foreground">
+                      Digital Farmer ID (Kisan Pehchan Patra)
+                    </span>
+                    <input
+                      type="file"
+                      accept=".pdf,.jpg,.jpeg,.png"
+                      onChange={(e) => {
+                        setFarmerId(e.target.files?.[0] ?? null)
+                        setError('')
+                      }}
+                      className="block w-full cursor-pointer rounded-xl border border-input bg-background p-3 text-sm file:mr-4 file:rounded-lg file:border-0 file:bg-primary file:px-3 file:py-2 file:text-sm file:font-semibold file:text-primary-foreground"
+                    />
+                    {farmerId && (
+                      <p className="text-xs text-primary">✓ {farmerId.name}</p>
+                    )}
+                  </label>
 
-                <span className="block text-xs text-muted-foreground">
-                  Digital Farmer ID (Kisan Pehchan Patra)
-                </span>
-
-                <input
-                  type="file"
-                  accept=".pdf,.jpg,.jpeg,.png"
-                  onChange={(e) => {
-                    setFarmerId(e.target.files?.[0] ?? null)
-                    setError('')
-                  }}
-                  className="block w-full cursor-pointer rounded-xl border border-input bg-background p-3 text-sm file:mr-4 file:rounded-lg file:border-0 file:bg-primary file:px-3 file:py-2 file:text-sm file:font-semibold file:text-primary-foreground"
-                />
-
-                {farmerId && (
-                  <p className="text-xs text-primary">
-                    ✓ {farmerId.name}
-                  </p>
-                )}
-              </label>
-
-              {/* Quality Certificate - OPTIONAL */}
-              <label className="mt-5 block space-y-2">
-                <span className="text-sm font-semibold">
-                  Quality Certificate
-                </span>
-
-                <span className="block text-xs text-muted-foreground">
-                  Approved Quality Certificate of Crops — Optional
-                </span>
-
-                <input
-                  type="file"
-                  accept=".pdf,.jpg,.jpeg,.png"
-                  onChange={(e) => {
-                    setQualityCertificate(
-                      e.target.files?.[0] ?? null,
-                    )
-                    setError('')
-                  }}
-                  className="block w-full cursor-pointer rounded-xl border border-input bg-background p-3 text-sm file:mr-4 file:rounded-lg file:border-0 file:bg-primary file:px-3 file:py-2 file:text-sm file:font-semibold file:text-primary-foreground"
-                />
-
-                {qualityCertificate && (
-                  <p className="text-xs text-primary">
-                    ✓ {qualityCertificate.name}
-                  </p>
-                )}
-              </label>
-
-              {/* Error */}
-              {error && (
-                <p className="mt-3 text-xs text-destructive">
-                  {error}
-                </p>
+                  <label className="mt-5 block space-y-2">
+                    <span className="text-sm font-semibold">
+                      Quality Certificate
+                    </span>
+                    <span className="block text-xs text-muted-foreground">
+                      Approved Quality Certificate of Crops — Optional
+                    </span>
+                    <input
+                      type="file"
+                      accept=".pdf,.jpg,.jpeg,.png"
+                      onChange={(e) => {
+                        setQualityCertificate(e.target.files?.[0] ?? null)
+                        setError('')
+                      }}
+                      className="block w-full cursor-pointer rounded-xl border border-input bg-background p-3 text-sm file:mr-4 file:rounded-lg file:border-0 file:bg-primary file:px-3 file:py-2 file:text-sm file:font-semibold file:text-primary-foreground"
+                    />
+                    {qualityCertificate && (
+                      <p className="text-xs text-primary">
+                        ✓ {qualityCertificate.name}
+                      </p>
+                    )}
+                  </label>
+                </>
               )}
 
-              {/* Send OTP */}
+              {error && (
+                <p className="mt-3 text-xs text-destructive">{error}</p>
+              )}
+
               <button
                 type="button"
                 onClick={sendOtp}
-                disabled={!isValidPhone || !farmerId}
-                className="mt-6 h-12 w-full rounded-xl bg-primary px-4 font-bold text-primary-foreground transition-opacity disabled:cursor-not-allowed disabled:opacity-50"
+                disabled={
+                  !isValidPhone ||
+                  (role === 'farmer' ? !isValidFarmerDetails : !isValidBuyerDetails)
+                }
+                className="mt-6 flex min-h-12 w-full items-center justify-center rounded-xl bg-primary font-bold text-primary-foreground disabled:cursor-not-allowed disabled:opacity-50"
               >
                 Send OTP
               </button>
             </>
           ) : (
             <>
-              {/* OTP */}
-              <label className="mt-6 block space-y-2">
-                <span className="text-sm font-semibold">
-                  Enter OTP
+              <p className="mt-6 text-sm text-muted-foreground">
+                OTP sent to +91 {phone}.{' '}
+                <span className="font-bold text-primary">
+                  (demo OTP: {sentOtp})
                 </span>
+              </p>
 
+              <label className="mt-4 block space-y-2">
+                <span className="text-sm font-semibold">Enter OTP</span>
                 <input
                   type="text"
                   inputMode="numeric"
                   maxLength={4}
                   value={otp}
-                  onChange={(e) =>
-                    setOtp(
-                      e.target.value
-                        .replace(/\D/g, '')
-                        .slice(0, 4),
-                    )
-                  }
+                  onChange={(e) => {
+                    setOtp(e.target.value.replace(/\D/g, '').slice(0, 4))
+                    setError('')
+                  }}
                   placeholder="4-digit OTP"
-                  className="h-12 w-full rounded-xl border border-input bg-background px-3 text-center text-lg tracking-[0.4em]"
+                  className="h-12 w-full rounded-xl border border-input bg-background px-3 text-center text-lg tracking-[0.5em]"
                 />
               </label>
 
-              <p className="mt-3 text-xs text-muted-foreground">
-                OTP sent to +91 {phone}
-              </p>
-
-              {/* DEMO OTP */}
-              <div className="mt-3 rounded-xl border border-primary/20 bg-primary/5 px-4 py-3">
-                <p className="text-sm font-semibold text-primary">
-                  Demo OTP: <span className="text-lg">{sentOtp}</span>
-                </p>
-              </div>
-
-              {/* Error */}
               {error && (
-                <p className="mt-3 text-xs text-destructive">
-                  {error}
-                </p>
+                <p className="mt-2 text-xs text-destructive">{error}</p>
               )}
 
-              {/* Verify OTP */}
               <button
                 type="button"
-                onClick={verifyOtp}
                 disabled={!isValidOtp}
-                className="mt-6 h-12 w-full rounded-xl bg-primary px-4 font-bold text-primary-foreground transition-opacity disabled:cursor-not-allowed disabled:opacity-50"
+                onClick={verifyOtp}
+                className="mt-5 flex min-h-12 w-full items-center justify-center rounded-xl bg-primary font-bold text-primary-foreground disabled:cursor-not-allowed disabled:opacity-50"
               >
-                Verify OTP
+                Verify &amp; Continue
               </button>
 
-              {/* Change Details */}
               <button
                 type="button"
                 onClick={() => {
@@ -618,7 +669,7 @@ function Login({
                   setOtp('')
                   setError('')
                 }}
-                className="mt-3 w-full text-sm font-semibold text-muted-foreground hover:text-foreground"
+                className="mt-3 w-full text-center text-xs font-semibold text-muted-foreground"
               >
                 Change details
               </button>
@@ -820,7 +871,9 @@ function Dashboard({
             </h2>
           </div>
 
-         
+          <span className="rounded-full bg-primary-foreground/10 px-3 py-1 text-xs">
+            Demo estimate
+          </span>
         </div>
 
         <div className="mt-7 grid gap-4 md:grid-cols-3">
@@ -1145,7 +1198,10 @@ function Comparison({
         />
       )}
 
-     
+      <p className="text-xs text-muted-foreground">
+        Sample / Historical Data · All values are estimates for
+        prototype demonstration.
+      </p>
     </div>
   )
 }
@@ -1898,7 +1954,10 @@ function Calculation({
         </div>
       </div>
 
-     
+      <div className="rounded-xl bg-accent/20 p-4 text-sm text-accent-foreground">
+        <strong>Note:</strong> All values shown are estimates
+        for prototype demonstration.
+      </div>
     </div>
   )
 }
@@ -2209,7 +2268,7 @@ function Forecast({
         </div>
 
         <span className="rounded-full border border-accent bg-accent/20 px-3 py-1 text-xs font-bold text-accent-foreground">
-          Market Forecast and Design Engine
+          Prototype Forecast
         </span>
       </div>
 
@@ -2533,6 +2592,12 @@ export default function Page() {
   const [farmerName, setFarmerName] =
     useState('')
 
+  const [buyerName, setBuyerName] =
+    useState('')
+
+  const [buyerBusinessName, setBuyerBusinessName] =
+    useState('')
+
   const [crop, setCrop] =
     useState<Crop>(crops[0])
 
@@ -2600,7 +2665,11 @@ export default function Page() {
 
   const demo = () => {
     setView('dashboard')
+    setRole('farmer')
+    setPhone('demo')
     setFarmerName('')
+    setBuyerName('')
+    setBuyerBusinessName('')
     setCrop(crops[0])
     setQuantity(20)
     setUnit('quintals')
@@ -2688,18 +2757,25 @@ export default function Page() {
     netReturn,
   }
 
-  if (!phone) {
-    return <Login onVerified={setPhone} />
-  }
-
   if (!role) {
     return (
       <RoleSelect
         selectRole={(selected) => {
           setRole(selected)
-          setView(
-            selected === 'buyer' ? 'marketplace' : 'dashboard',
-          )
+        }}
+      />
+    )
+  }
+
+  if (!phone) {
+    return (
+      <Login
+        role={role}
+        onVerified={setPhone}
+        onFarmerName={setFarmerName}
+        onBuyerDetails={(name, businessName) => {
+          setBuyerName(name)
+          setBuyerBusinessName(businessName)
         }}
       />
     )
