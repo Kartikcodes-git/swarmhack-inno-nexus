@@ -58,18 +58,7 @@ import {
 import { Logistics } from '@/components/logistics'
 import { Phase4QuickAccess } from '@/components/phase4'
 
-const crops = [
-  { name: 'Onion', icon: '🧅' },
-  { name: 'Tomato', icon: '🍅' },
-  { name: 'Wheat', icon: '🌾' },
-  { name: 'Soybean', icon: '🌱' },
-  { name: 'Cotton', icon: '☁️' },
-  { name: 'Potato', icon: '🥔' },
-  { name: 'Maize', icon: '🌽' },
-  { name: 'Gram', icon: '🫘' },
-]
-
-type Crop = (typeof crops)[number]
+import { crops, type Crop } from '@/lib/crops'
 
 type View =
   | 'dashboard'
@@ -177,12 +166,14 @@ function Sidebar({
   view,
   navigate,
   t,
+  role,
 }: {
   view: View
   navigate: (view: View) => void
   t: Labels
+  role: 'farmer' | 'buyer'
 }) {
-  const links: Array<[string, View, typeof Home]> = [
+  const allLinks: Array<[string, View, typeof Home]> = [
     [t.dashboard, 'dashboard', Home],
     [t.markets, 'comparison', BarChart3],
     [t.recommendation, 'recommendation', TrendingUp],
@@ -191,6 +182,14 @@ function Sidebar({
     [t.buyerMarketplaceTag, 'marketplace', Users],
     [t.offers, 'offers', Package],
   ]
+
+  // Buyer role only gets the marketplace in nav — buyer's own
+  // submitted offers live inside that screen ("My Offers" button),
+  // not as a separate nav item.
+  const links =
+    role === 'buyer'
+      ? allLinks.filter(([, target]) => target === 'marketplace')
+      : allLinks
 
   return (
     <aside className="hidden w-64 shrink-0 border-r border-border bg-card px-5 py-7 lg:block">
@@ -2065,20 +2064,28 @@ function MobileNav({
   view,
   navigate,
   t,
+  role,
 }: {
   view: View
   navigate: (view: View) => void
   t: Labels
+  role: 'farmer' | 'buyer'
 }) {
-  const items: Array<
+  const allItems: Array<
     [string, View, typeof Home]
   > = [
       [t.dashboard, 'dashboard', Home],
       [t.markets, 'comparison', BarChart3],
       [t.logisticsTag, 'logistics', Truck],
+      [t.buyerMarketplaceTag, 'marketplace', Users],
       [t.offers, 'offers', Package],
       [t.trends, 'trends', TrendingUp],
     ]
+
+  const items =
+    role === 'buyer'
+      ? allItems.filter(([, target]) => target === 'marketplace')
+      : allItems.filter(([, target]) => target !== 'marketplace')
 
   return (
     <nav className="fixed inset-x-0 bottom-0 z-20 flex justify-around border-t border-border bg-card/95 px-2 py-3 backdrop-blur lg:hidden">
@@ -2268,6 +2275,7 @@ export default function Page() {
         view={view}
         navigate={navigate}
         t={t}
+        role={role}
       />
 
       {mobileMenu && (
@@ -2296,15 +2304,18 @@ export default function Page() {
             </div>
 
             <nav className="mt-10 space-y-2">
-              {[
-                [t.dashboard, 'dashboard'],
-                [t.markets, 'comparison'],
-                [t.recommendation, 'recommendation'],
-                [t.logisticsTag, 'logistics'],
-                [t.trends, 'trends'],
-                [t.buyerMarketplaceTag, 'marketplace'],
-                [t.myOffers, 'offers'],
-              ].map(([label, target]) => (
+              {(role === 'buyer'
+                ? [[t.buyerMarketplaceTag, 'marketplace']]
+                : [
+                    [t.dashboard, 'dashboard'],
+                    [t.markets, 'comparison'],
+                    [t.recommendation, 'recommendation'],
+                    [t.logisticsTag, 'logistics'],
+                    [t.trends, 'trends'],
+                    [t.buyerMarketplaceTag, 'marketplace'],
+                    [t.offers, 'offers'],
+                  ]
+              ).map(([label, target]) => (
                 <button
                   type="button"
                   key={target}
@@ -2467,9 +2478,7 @@ export default function Page() {
 
           {view === 'marketplace' && (
             <BuyerMarketplace
-              openOffers={() =>
-                setView('offers')
-              }
+              offers={offers}
               context={context}
               setOffers={setOffers}
             />
@@ -2510,6 +2519,7 @@ export default function Page() {
           view={view}
           navigate={navigate}
           t={t}
+          role={role}
         />
       </div>
 

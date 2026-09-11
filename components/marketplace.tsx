@@ -3,6 +3,8 @@
 import { useMemo, useState } from 'react'
 import { Check, MapPin, X } from 'lucide-react'
 import { useLanguage } from '@/lib/language'
+import { crops } from '@/lib/crops'
+import { locations } from '@/lib/locations'
 
 export type MarketplaceView = 'marketplace' | 'offers'
 
@@ -426,11 +428,11 @@ function BuyerCards() {
 /* -------------------------------------------------------------------------- */
 
 export function BuyerMarketplace({
-  openOffers,
+  offers,
   context,
   setOffers,
 }: {
-  openOffers: () => void
+  offers: Offer[]
   context: {
     crop: string
     quantity: number
@@ -448,6 +450,7 @@ export function BuyerMarketplace({
   const [minPrice, setMinPrice] = useState('')
   const [selected, setSelected] = useState<Listing | null>(null)
   const [submitted, setSubmitted] = useState<Offer | null>(null)
+  const [showMyOffers, setShowMyOffers] = useState(false)
 
   const filtered = useMemo(
     () =>
@@ -479,13 +482,17 @@ export function BuyerMarketplace({
         </div>
 
         <button
-          onClick={openOffers}
+          onClick={() => setShowMyOffers((v) => !v)}
           className="min-h-11 rounded-xl border border-primary px-4 text-sm font-bold text-primary"
         >
-          {t.myOffers}
+          {showMyOffers ? t.findBuyers : t.myOffers}
         </button>
       </div>
 
+      {showMyOffers ? (
+        <BuyerOfferStatusList offers={offers} />
+      ) : (
+        <>
       <section className="rounded-2xl border border-border bg-card p-4 shadow-sm">
         <div className="grid gap-3 sm:grid-cols-3">
           <label className="text-xs font-bold text-muted-foreground">
@@ -496,9 +503,9 @@ export function BuyerMarketplace({
               className="mt-2 h-11 w-full rounded-xl border border-input bg-background px-3 text-sm text-foreground"
             >
               <option>All crops</option>
-              <option>Onion</option>
-              <option>Tomato</option>
-              <option>Soybean</option>
+              {crops.map((crop) => (
+                <option key={crop.name}>{crop.name}</option>
+              ))}
             </select>
           </label>
 
@@ -510,9 +517,9 @@ export function BuyerMarketplace({
               className="mt-2 h-11 w-full rounded-xl border border-input bg-background px-3 text-sm text-foreground"
             >
               <option>All locations</option>
-              <option>Nashik</option>
-              <option>Pune</option>
-              <option>Ahilyanagar</option>
+              {locations.map((location) => (
+                <option key={location.id}>{location.name}</option>
+              ))}
             </select>
           </label>
 
@@ -562,6 +569,13 @@ export function BuyerMarketplace({
         ))}
       </div>
 
+      {filtered.length === 0 && (
+        <p className="rounded-2xl border border-dashed border-border bg-card p-6 text-center text-sm text-muted-foreground">
+          No listings match this crop/location combination yet in the
+          prototype dataset.
+        </p>
+      )}
+
       <BuyerCards />
 
       <section className="rounded-2xl bg-muted p-5 text-sm text-muted-foreground">
@@ -573,22 +587,89 @@ export function BuyerMarketplace({
           data for this prototype.
         </p>
       </section>
+        </>
+      )}
 
       {selected && (
         <OfferModal
           listing={selected}
           close={() => setSelected(null)}
           submit={(offer) => {
-            // Buyer offer now joins the SAME shared offers list the
-            // farmer sees — no longer a dead-end banner. It renders
-            // through the exact same OfferCard as any other offer.
             setOffers((current) => [...current, offer])
             setSubmitted(offer)
             setSelected(null)
-            openOffers()
           }}
         />
       )}
+    </div>
+  )
+}
+
+/* -------------------------------------------------------------------------- */
+/* Buyer's own offer status list (read-only — no accept/reject/negotiate)    */
+/* -------------------------------------------------------------------------- */
+
+function BuyerOfferStatusList({ offers }: { offers: Offer[] }) {
+  const { t } = useLanguage()
+
+  if (offers.length === 0) {
+    return (
+      <p className="rounded-2xl border border-dashed border-border bg-card p-6 text-center text-sm text-muted-foreground">
+        You haven't submitted any offers yet in this prototype
+        session.
+      </p>
+    )
+  }
+
+  return (
+    <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
+      {offers.map((offer) => (
+        <div
+          key={offer.id}
+          className="rounded-2xl border border-border bg-card p-5"
+        >
+          <div className="flex items-center justify-between">
+            <h3 className="font-serif text-lg font-bold">
+              {offer.crop}
+            </h3>
+
+            <Badge
+              tone={
+                offer.status === 'Accepted'
+                  ? 'green'
+                  : offer.status === 'Rejected'
+                    ? 'red'
+                    : 'amber'
+              }
+            >
+              {offer.status}
+            </Badge>
+          </div>
+
+          <p className="mt-1 text-sm text-muted-foreground">
+            {offer.quantity} quintals · {money(offer.price)}/q
+          </p>
+
+          {offer.counterPrice != null && offer.status === 'Pending' && (
+            <p className="mt-3 rounded-lg bg-amber-50 p-2 text-xs font-semibold text-amber-900">
+              Farmer countered: {money(offer.counterPrice)}/q
+            </p>
+          )}
+
+          {offer.status === 'Accepted' && offer.grade && (
+            <p className="mt-3 rounded-lg bg-emerald-50 p-2 text-xs font-semibold text-emerald-900">
+              Graded {offer.grade} · Final price{' '}
+              {money(offer.finalPrice ?? offer.price)}/q
+            </p>
+          )}
+
+          {offer.status === 'Accepted' && !offer.grade && (
+            <p className="mt-3 rounded-lg bg-emerald-50 p-2 text-xs font-semibold text-emerald-900">
+              Accepted — grading pending
+            </p>
+          )}
+        </div>
+      ))}
     </div>
   )
 }
@@ -1005,8 +1086,6 @@ export function FarmerOffers({
     status: 'Pending',
   }
 
-  // Buyer-submitted offers (from BuyerMarketplace) and the demo
-  // fallback both render through the exact same OfferCard.
   const shown = offers.length ? offers : [defaultOffer]
 
   const [negotiatingId, setNegotiatingId] = useState<string | null>(

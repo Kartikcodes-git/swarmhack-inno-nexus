@@ -203,15 +203,6 @@ export function Logistics({
 
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">
-                      Cost / quintal
-                    </span>
-                    <strong>
-                      {money(option.costPerQuintal)}
-                    </strong>
-                  </div>
-
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">
                       ETA
                     </span>
                     <strong>{option.eta}</strong>
