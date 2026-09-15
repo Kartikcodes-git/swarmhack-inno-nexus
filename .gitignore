@@ -8,7 +8,7 @@ __v0_jsx-dev-runtime.ts
 
 # Environment variables
 .env*.local
-AGMARKNET_API_KEY=579b464db66ec23bdd00000117f6351b72d14edd5057ec31a77f75d8
+
 
 # Common ignores
 node_modules
