@@ -1,12 +1,21 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
-import { Check, MapPin, Phone, X } from 'lucide-react'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { Check, MapPin, Phone, Star, X } from 'lucide-react'
 import { useLanguage } from '@/lib/language'
 import { crops } from '@/lib/crops'
 import { locations } from '@/lib/locations'
+import {
+  addRating,
+  canBuyerRateFarmer,
+  getRatingSummary,
+  hasBuyerAlreadyRated,
+  type FarmerRating,
+} from '@/lib/ratings'
 
 export type MarketplaceView = 'marketplace' | 'offers'
+
+export type QualityGrade = 'A' | 'B' | 'C'
 
 type Listing = {
   id: string
@@ -18,16 +27,18 @@ type Listing = {
   price: number
   date: string
   quality: string
+  // grade the FARMER assigns when listing the produce
+  grade: QualityGrade
   isLive?: boolean
 }
 
 type OfferStatus = 'Pending' | 'Accepted' | 'Rejected'
 
-export type QualityGrade = 'A' | 'B' | 'C'
-
 export type Offer = {
   id: string
   buyer: string
+  /** farmer who listed the produce — needed to verify purchases for ratings */
+  farmer: string
   crop: string
   quantity: number
   price: number
@@ -52,6 +63,7 @@ const listings: Listing[] = [
     price: 2650,
     date: '5 Sept 2026',
     quality: 'Grade A',
+    grade: 'A',
   },
   {
     id: 'onion-35',
@@ -62,7 +74,8 @@ const listings: Listing[] = [
     quantity: 35,
     price: 2600,
     date: '6 Sept 2026',
-    quality: 'Grade A',
+    quality: 'Grade B',
+    grade: 'B',
   },
   {
     id: 'tomato-15',
@@ -74,6 +87,7 @@ const listings: Listing[] = [
     price: 2200,
     date: '5 Sept 2026',
     quality: 'Grade A',
+    grade: 'A',
   },
   {
     id: 'soybean-30',
@@ -84,7 +98,8 @@ const listings: Listing[] = [
     quantity: 30,
     price: 4700,
     date: '7 Sept 2026',
-    quality: 'Grade A',
+    quality: 'Grade C',
+    grade: 'C',
   },
 ]
 
@@ -124,6 +139,11 @@ const CROP_TO_COMMODITY: Record<string, string> = {
   Potato: 'Potato',
   Maize: 'Maize',
   Gram: 'Gram',
+  Banana: 'Banana',
+  Grapes: 'Grapes',
+  Mango: 'Mango',
+  Pomegranate: 'Pomegranate',
+  Orange: 'Orange',
 }
 
 function useMandiPrices() {
@@ -218,20 +238,50 @@ function Info({
 
 function OfferModal({
   listing,
+  buyerName,
+  buyerBusinessName,
   close,
   submit,
 }: {
   listing: Listing
+  buyerName: string
+  buyerBusinessName: string
   close: () => void
   submit: (offer: Offer) => void
 }) {
-  const [buyerName, setBuyerName] = useState('ABC Foods')
-  const [price, setPrice] = useState(2700)
+  const [price, setPrice] = useState(listing.price)
   const [quantity, setQuantity] = useState(listing.quantity)
   const [message, setMessage] = useState(
     'Interested in purchasing the full quantity.',
   )
   const [error, setError] = useState('')
+
+  const dialogRef = useRef<HTMLDivElement | null>(null)
+
+  // Centre the dialog in the viewport and lock background scroll
+  // while it is open, so it never opens off-screen.
+  useEffect(() => {
+    const previousOverflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+
+    dialogRef.current?.scrollIntoView({
+      block: 'center',
+      behavior: 'smooth',
+    })
+
+    function onKey(event: KeyboardEvent) {
+      if (event.key === 'Escape') {
+        close()
+      }
+    }
+
+    window.addEventListener('keydown', onKey)
+
+    return () => {
+      document.body.style.overflow = previousOverflow
+      window.removeEventListener('keydown', onKey)
+    }
+  }, [close])
 
   const onSubmit = () => {
     if (price <= 0) {
@@ -250,7 +300,8 @@ function OfferModal({
 
     submit({
       id: `offer-${Date.now()}`,
-      buyer: buyerName,
+      buyer: buyerBusinessName || buyerName,
+      farmer: listing.farmer,
       crop: listing.crop,
       quantity,
       price,
@@ -262,11 +313,16 @@ function OfferModal({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-end justify-center bg-foreground/30 p-0 sm:items-center sm:p-4"
+      className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-foreground/40 p-4"
       role="dialog"
       aria-modal="true"
+      onClick={close}
     >
-      <div className="w-full max-w-lg rounded-t-3xl bg-card p-6 shadow-2xl sm:rounded-3xl">
+      <div
+        ref={dialogRef}
+        onClick={(e) => e.stopPropagation()}
+        className="my-auto max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-3xl bg-card p-6 shadow-2xl"
+      >
         <div className="flex items-start justify-between">
           <div>
             <Badge>Prototype Offer</Badge>
@@ -310,20 +366,19 @@ function OfferModal({
         </div>
 
         <div className="mt-5 space-y-4">
-          <label className="block text-sm font-semibold">
-            Buyer / company name
-            <select
-              className="mt-2 h-12 w-full rounded-xl border border-input bg-background px-3"
-              value={buyerName}
-              onChange={(e) => setBuyerName(e.target.value)}
-            >
-              {buyers.map((buyer) => (
-                <option key={buyer.name} value={buyer.name}>
-                  {buyer.name}
-                </option>
-              ))}
-            </select>
-          </label>
+          <div className="rounded-xl border border-border bg-muted/50 p-3">
+            <p className="text-xs text-muted-foreground">
+              Offer sent as
+            </p>
+            <p className="mt-1 font-bold">
+              {buyerBusinessName || buyerName}
+            </p>
+            {buyerBusinessName && buyerName && (
+              <p className="text-xs text-muted-foreground">
+                {buyerName}
+              </p>
+            )}
+          </div>
 
           <label className="block text-sm font-semibold">
             Offer price
@@ -375,6 +430,179 @@ function OfferModal({
   )
 }
 
+
+/* -------------------------------------------------------------------------- */
+/* Farmer ratings                                                            */
+/* -------------------------------------------------------------------------- */
+
+function Stars({
+  value,
+  size = 'sm',
+}: {
+  value: number
+  size?: 'sm' | 'md'
+}) {
+  const dimension = size === 'md' ? 'size-5' : 'size-3.5'
+
+  return (
+    <span className="inline-flex items-center gap-0.5">
+      {[1, 2, 3, 4, 5].map((star) => (
+        <Star
+          key={star}
+          className={`${dimension} ${
+            star <= Math.round(value)
+              ? 'fill-amber-400 text-amber-400'
+              : 'text-muted-foreground/40'
+          }`}
+        />
+      ))}
+    </span>
+  )
+}
+
+function FarmerRatingBadge({
+  ratings,
+  farmer,
+}: {
+  ratings: FarmerRating[]
+  farmer: string
+}) {
+  const summary = getRatingSummary(ratings, farmer)
+
+  if (summary.count === 0) {
+    return (
+      <span className="text-xs text-muted-foreground">
+        No ratings yet
+      </span>
+    )
+  }
+
+  return (
+    <span className="inline-flex items-center gap-1.5">
+      <Stars value={summary.average} />
+      <span className="text-xs font-semibold">
+        {summary.average.toFixed(1)}
+      </span>
+      <span className="text-xs text-muted-foreground">
+        ({summary.count})
+      </span>
+    </span>
+  )
+}
+
+/**
+ * Only rendered when canBuyerRateFarmer() passes — i.e. this buyer
+ * has an accepted purchase from this farmer. Verification happens
+ * in the parent, and again here, so the control can't be reached
+ * by a buyer who never bought from them.
+ */
+function RateFarmer({
+  farmer,
+  buyer,
+  offers,
+  ratings,
+  setRatings,
+}: {
+  farmer: string
+  buyer: string
+  offers: Offer[]
+  ratings: FarmerRating[]
+  setRatings: React.Dispatch<React.SetStateAction<FarmerRating[]>>
+}) {
+  const [stars, setStars] = useState(0)
+  const [comment, setComment] = useState('')
+  const [done, setDone] = useState(false)
+
+  const eligible = canBuyerRateFarmer(offers, buyer, farmer)
+  const alreadyRated = hasBuyerAlreadyRated(ratings, buyer, farmer)
+
+  if (!eligible) {
+    return null
+  }
+
+  if (done || alreadyRated) {
+    return (
+      <div className="rounded-xl border border-border bg-muted/50 p-3">
+        <p className="text-xs font-semibold text-muted-foreground">
+          You rated {farmer}
+        </p>
+        <div className="mt-1.5">
+          <Stars
+            value={
+              getRatingSummary(
+                ratings.filter((r) => r.buyer === buyer),
+                farmer,
+              ).average
+            }
+          />
+        </div>
+      </div>
+    )
+  }
+
+  function submitRating() {
+    if (stars < 1) {
+      return
+    }
+
+    setRatings((current) =>
+      addRating(current, {
+        farmer,
+        buyer,
+        stars,
+        comment: comment.trim() || undefined,
+      }),
+    )
+
+    setDone(true)
+  }
+
+  return (
+    <div className="rounded-xl border border-border bg-card p-4">
+      <p className="text-sm font-bold">Rate {farmer}</p>
+      <p className="mt-1 text-xs text-muted-foreground">
+        You can rate this farmer because you completed a purchase
+        from them.
+      </p>
+
+      <div className="mt-3 flex items-center gap-1">
+        {[1, 2, 3, 4, 5].map((star) => (
+          <button
+            key={star}
+            type="button"
+            aria-label={`${star} star`}
+            onClick={() => setStars(star)}
+          >
+            <Star
+              className={`size-6 ${
+                star <= stars
+                  ? 'fill-amber-400 text-amber-400'
+                  : 'text-muted-foreground/40'
+              }`}
+            />
+          </button>
+        ))}
+      </div>
+
+      <textarea
+        value={comment}
+        onChange={(e) => setComment(e.target.value)}
+        placeholder="Optional comment about quality, honesty, punctuality"
+        className="mt-3 min-h-16 w-full rounded-xl border border-input bg-background p-3 text-sm"
+      />
+
+      <button
+        type="button"
+        disabled={stars < 1}
+        onClick={submitRating}
+        className="mt-3 min-h-11 w-full rounded-xl bg-primary px-4 text-sm font-bold text-primary-foreground disabled:cursor-not-allowed disabled:opacity-50"
+      >
+        Submit rating
+      </button>
+    </div>
+  )
+}
+
 /* -------------------------------------------------------------------------- */
 /* Listing card                                                              */
 /* -------------------------------------------------------------------------- */
@@ -383,10 +611,12 @@ function ListingCard({
   listing,
   open,
   isLive,
+  ratings,
 }: {
   listing: Listing
   open: (listing: Listing) => void
   isLive?: boolean
+  ratings: FarmerRating[]
 }) {
   return (
     <article className="rounded-2xl border border-border bg-card p-5 shadow-sm">
@@ -399,6 +629,12 @@ function ListingCard({
           <p className="mt-1 text-sm text-muted-foreground">
             {listing.farmer}
           </p>
+          <div className="mt-1.5">
+            <FarmerRatingBadge
+              ratings={ratings}
+              farmer={listing.farmer}
+            />
+          </div>
         </div>
 
         <div className="flex flex-col items-end gap-1.5">
@@ -516,8 +752,16 @@ export function BuyerMarketplace({
   setOffers,
   goToGrading,
   goToLogistics,
+  buyerName,
+  buyerBusinessName,
+  ratings,
+  setRatings,
 }: {
   offers: Offer[]
+  buyerName: string
+  buyerBusinessName: string
+  ratings: FarmerRating[]
+  setRatings: React.Dispatch<React.SetStateAction<FarmerRating[]>>
   context: {
     crop: string
     quantity: number
@@ -537,6 +781,9 @@ export function BuyerMarketplace({
   const [cropFilter, setCropFilter] = useState('All crops')
   const [locationFilter, setLocationFilter] = useState('All locations')
   const [minPrice, setMinPrice] = useState('')
+  const [gradeFilter, setGradeFilter] = useState<'All grades' | QualityGrade>(
+    'All grades',
+  )
   const [selected, setSelected] = useState<Listing | null>(null)
   const [submitted, setSubmitted] = useState<Offer | null>(null)
   const [showMyOffers, setShowMyOffers] = useState(false)
@@ -562,9 +809,10 @@ export function BuyerMarketplace({
           (cropFilter === 'All crops' || item.crop === cropFilter) &&
           (locationFilter === 'All locations' ||
             item.location === locationFilter) &&
+          (gradeFilter === 'All grades' || item.grade === gradeFilter) &&
           (!minPrice || item.price >= Number(minPrice)),
       ),
-    [liveListings, cropFilter, locationFilter, minPrice],
+    [liveListings, cropFilter, locationFilter, gradeFilter, minPrice],
   )
 
   return (
@@ -594,6 +842,9 @@ export function BuyerMarketplace({
 
       {showMyOffers ? (
         <BuyerOfferStatusList
+          buyer={buyerBusinessName || buyerName}
+          ratings={ratings}
+          setRatings={setRatings}
           offers={offers}
           setOffers={setOffers}
           goToGrading={goToGrading}
@@ -602,7 +853,7 @@ export function BuyerMarketplace({
       ) : (
         <>
       <section className="rounded-2xl border border-border bg-card p-4 shadow-sm">
-        <div className="grid gap-3 sm:grid-cols-3">
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           <label className="text-xs font-bold text-muted-foreground">
             {t.filterCrop}
             <select
@@ -628,6 +879,24 @@ export function BuyerMarketplace({
               {locations.map((location) => (
                 <option key={location.id}>{location.name}</option>
               ))}
+            </select>
+          </label>
+
+          <label className="text-xs font-bold text-muted-foreground">
+            {t.filterGrade}
+            <select
+              value={gradeFilter}
+              onChange={(e) =>
+                setGradeFilter(
+                  e.target.value as 'All grades' | QualityGrade,
+                )
+              }
+              className="mt-2 h-11 w-full rounded-xl border border-input bg-background px-3 text-sm text-foreground"
+            >
+              <option value="All grades">All grades</option>
+              <option value="A">{t.gradeALabel}</option>
+              <option value="B">{t.gradeBLabel}</option>
+              <option value="C">{t.gradeCLabel}</option>
             </select>
           </label>
 
@@ -674,6 +943,7 @@ export function BuyerMarketplace({
             listing={listing}
             open={setSelected}
             isLive={listing.isLive}
+            ratings={ratings}
           />
         ))}
       </div>
@@ -702,6 +972,8 @@ export function BuyerMarketplace({
       {selected && (
         <OfferModal
           listing={selected}
+          buyerName={buyerName}
+          buyerBusinessName={buyerBusinessName}
           close={() => setSelected(null)}
           submit={(offer) => {
             // Buyer offer now joins the SAME shared offers list the
@@ -726,11 +998,17 @@ function BuyerOfferStatusList({
   setOffers,
   goToGrading,
   goToLogistics,
+  buyer,
+  ratings,
+  setRatings,
 }: {
   offers: Offer[]
   setOffers: React.Dispatch<React.SetStateAction<Offer[]>>
   goToGrading: (offerId: string) => void
   goToLogistics: () => void
+  buyer: string
+  ratings: FarmerRating[]
+  setRatings: React.Dispatch<React.SetStateAction<FarmerRating[]>>
 }) {
   const { t } = useLanguage()
 
@@ -819,6 +1097,18 @@ function BuyerOfferStatusList({
                     Reject
                   </button>
                 </div>
+              </div>
+            )}
+
+            {offer.status === 'Accepted' && offer.farmer && (
+              <div className="mt-3">
+                <RateFarmer
+                  farmer={offer.farmer}
+                  buyer={buyer}
+                  offers={offers}
+                  ratings={ratings}
+                  setRatings={setRatings}
+                />
               </div>
             )}
 
@@ -1390,8 +1680,12 @@ export function FarmerOffers({
   context,
   goToLogistics,
   goToContact,
+  farmerName,
+  ratings,
 }: {
   offers: Offer[]
+  farmerName: string
+  ratings: FarmerRating[]
   setOffers: React.Dispatch<React.SetStateAction<Offer[]>>
   openMarketplace: () => void
   context: {
@@ -1414,6 +1708,7 @@ export function FarmerOffers({
     {
       id: 'demo-abc-foods',
       buyer: 'ABC Foods',
+      farmer: farmerName,
       crop: context.crop,
       quantity: context.quantity,
       price: 2700,
@@ -1424,6 +1719,7 @@ export function FarmerOffers({
     {
       id: 'demo-freshmart',
       buyer: 'FreshMart',
+      farmer: farmerName,
       crop: context.crop,
       quantity: context.quantity,
       price: 2650,
@@ -1434,6 +1730,7 @@ export function FarmerOffers({
     {
       id: 'demo-agrotrade',
       buyer: 'AgroTrade',
+      farmer: farmerName,
       crop: context.crop,
       quantity: 15,
       price: 2750,
@@ -1487,6 +1784,16 @@ export function FarmerOffers({
           <p className="mt-2 text-muted-foreground">
             {t.buyerOffersSubtitle}
           </p>
+
+          <div className="mt-3 flex items-center gap-2">
+            <span className="text-xs font-semibold text-muted-foreground">
+              Your rating
+            </span>
+            <FarmerRatingBadge
+              ratings={ratings}
+              farmer={farmerName}
+            />
+          </div>
         </div>
 
         <button

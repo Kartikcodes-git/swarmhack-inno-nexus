@@ -17,6 +17,13 @@ const SPOILAGE_PROFILES: Record<string, SpoilageProfile> = {
   Potato: { dailyLossPercent: 1.5, shelfLifeDays: 30 },
   Maize: { dailyLossPercent: 0.2, shelfLifeDays: 120 },
   Gram: { dailyLossPercent: 0.1, shelfLifeDays: 180 },
+
+  // Fruits — highly perishable, short shelf life
+  Banana: { dailyLossPercent: 5, shelfLifeDays: 6 },
+  Grapes: { dailyLossPercent: 3.5, shelfLifeDays: 12 },
+  Mango: { dailyLossPercent: 4.5, shelfLifeDays: 8 },
+  Pomegranate: { dailyLossPercent: 1.2, shelfLifeDays: 45 },
+  Orange: { dailyLossPercent: 1.8, shelfLifeDays: 25 },
 }
 
 const DEFAULT_PROFILE: SpoilageProfile = {

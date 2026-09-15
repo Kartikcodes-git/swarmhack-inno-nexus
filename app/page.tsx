@@ -68,7 +68,16 @@ import {
 import { Logistics } from '@/components/logistics'
 import { Phase4QuickAccess } from '@/components/phase4'
 
-import { crops, type Crop } from '@/lib/crops'
+import {
+  crops,
+  cropCategories,
+  getCropsByCategory,
+  type Crop,
+} from '@/lib/crops'
+import {
+  seedRatings,
+  type FarmerRating,
+} from '@/lib/ratings'
 
 type View =
   | 'dashboard'
@@ -394,8 +403,6 @@ function Login({
   onBuyerDetails: (name: string, businessName: string) => void
 }) {
   const [phone, setPhone] = useState('')
-  const [otp, setOtp] = useState('')
-  const [sentOtp, setSentOtp] = useState<string | null>(null)
   const [farmerName, setLocalFarmerName] = useState('')
   const [buyerName, setBuyerName] = useState('')
   const [businessName, setBusinessName] = useState('')
@@ -403,7 +410,6 @@ function Login({
   const [error, setError] = useState('')
 
   const isValidPhone = /^\d{10}$/.test(phone)
-  const isValidOtp = /^\d{4}$/.test(otp)
 
   const isValidFarmerDetails =
     farmerName.trim().length > 0
@@ -411,7 +417,7 @@ function Login({
   const isValidBuyerDetails =
     buyerName.trim().length > 0 && businessName.trim().length > 0
 
-  function sendOtp() {
+  function submit() {
     if (!isValidPhone) {
       setError('Enter a valid 10-digit mobile number')
       return
@@ -428,23 +434,6 @@ function Login({
       } else {
         setError('Please enter your business or organization name')
       }
-      return
-    }
-
-    setError('')
-
-    // Demo OTP — shown on screen for the prototype.
-    const generated = String(
-      Math.floor(1000 + Math.random() * 9000),
-    )
-
-    setSentOtp(generated)
-    setOtp('')
-  }
-
-  function verifyOtp() {
-    if (otp !== sentOtp) {
-      setError('Incorrect OTP. Try again.')
       return
     }
 
@@ -478,9 +467,7 @@ function Login({
             Enter your details to continue
           </p>
 
-          {!sentOtp ? (
-            <>
-              {role === 'farmer' ? (
+          {role === 'farmer' ? (
                 <label className="mt-6 block space-y-2">
                   <span className="text-sm font-semibold">
                     Farmer name <span className="text-destructive">*</span>
@@ -559,7 +546,10 @@ function Login({
                 <>
                   <label className="mt-5 block space-y-2">
                     <span className="text-sm font-semibold">
-                      Upload ID
+                      Upload ID{' '}
+                      <span className="font-normal text-muted-foreground">
+                        (optional)
+                      </span>
                     </span>
                     <span className="block text-xs text-muted-foreground">
                       Digital Farmer ID (Kisan Pehchan Patra)
@@ -585,69 +575,17 @@ function Login({
                 <p className="mt-3 text-xs text-destructive">{error}</p>
               )}
 
-              <button
-                type="button"
-                onClick={sendOtp}
-                disabled={
-                  !isValidPhone ||
-                  (role === 'farmer' ? !isValidFarmerDetails : !isValidBuyerDetails)
-                }
-                className="mt-6 flex min-h-12 w-full items-center justify-center rounded-xl bg-primary font-bold text-primary-foreground disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                Send OTP
-              </button>
-            </>
-          ) : (
-            <>
-              <p className="mt-6 text-sm text-muted-foreground">
-                OTP sent to +91 {phone}.{' '}
-                <span className="font-bold text-primary">
-                  (demo OTP: {sentOtp})
-                </span>
-              </p>
-
-              <label className="mt-4 block space-y-2">
-                <span className="text-sm font-semibold">Enter OTP</span>
-                <input
-                  type="text"
-                  inputMode="numeric"
-                  maxLength={4}
-                  value={otp}
-                  onChange={(e) => {
-                    setOtp(e.target.value.replace(/\D/g, '').slice(0, 4))
-                    setError('')
-                  }}
-                  placeholder="4-digit OTP"
-                  className="h-12 w-full rounded-xl border border-input bg-background px-3 text-center text-lg tracking-[0.5em]"
-                />
-              </label>
-
-              {error && (
-                <p className="mt-2 text-xs text-destructive">{error}</p>
-              )}
-
-              <button
-                type="button"
-                disabled={!isValidOtp}
-                onClick={verifyOtp}
-                className="mt-5 flex min-h-12 w-full items-center justify-center rounded-xl bg-primary font-bold text-primary-foreground disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                Verify &amp; Continue
-              </button>
-
-              <button
-                type="button"
-                onClick={() => {
-                  setSentOtp(null)
-                  setOtp('')
-                  setError('')
-                }}
-                className="mt-3 w-full text-center text-xs font-semibold text-muted-foreground"
-              >
-                Change details
-              </button>
-            </>
-          )}
+          <button
+            type="button"
+            onClick={submit}
+            disabled={
+              !isValidPhone ||
+              (role === 'farmer' ? !isValidFarmerDetails : !isValidBuyerDetails)
+            }
+            className="mt-6 flex min-h-12 w-full items-center justify-center rounded-xl bg-primary font-bold text-primary-foreground disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            Continue
+          </button>
         </div>
       </div>
     </div>
@@ -867,14 +805,22 @@ function Dashboard({
               }}
               className="h-12 w-full rounded-xl border border-primary-foreground/20 bg-primary-foreground/10 px-3 font-semibold outline-none"
             >
-              {crops.map((item) => (
-                <option
-                  key={item.name}
-                  value={item.name}
+              {cropCategories.map((category) => (
+                <optgroup
+                  key={category}
+                  label={category}
                   className="text-foreground"
                 >
-                  {item.icon} {item.name}
-                </option>
+                  {getCropsByCategory(category).map((item) => (
+                    <option
+                      key={item.name}
+                      value={item.name}
+                      className="text-foreground"
+                    >
+                      {item.icon} {item.name}
+                    </option>
+                  ))}
+                </optgroup>
               ))}
             </select>
           </label>
@@ -2589,6 +2535,9 @@ export default function Page() {
   const [offers, setOffers] =
     useState<Offer[]>([])
 
+  const [ratings, setRatings] =
+    useState<FarmerRating[]>(seedRatings)
+
   const [offline, setOffline] =
     useState(false)
 
@@ -3000,6 +2949,10 @@ export default function Page() {
 
           {view === 'marketplace' && (
             <BuyerMarketplace
+              ratings={ratings}
+              setRatings={setRatings}
+              buyerName={buyerName}
+              buyerBusinessName={buyerBusinessName}
               offers={offers}
               context={context}
               setOffers={setOffers}
@@ -3010,6 +2963,8 @@ export default function Page() {
 
           {view === 'offers' && (
             <FarmerOffers
+              farmerName={farmerName}
+              ratings={ratings}
               offers={offers}
               setOffers={setOffers}
               openMarketplace={() =>

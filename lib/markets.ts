@@ -34,6 +34,11 @@ export const markets: Market[] = [
       Potato: 1950,
       Maize: 2260,
       Gram: 5850,
+      Banana: 1850,
+      Grapes: 6200,
+      Mango: 8500,
+      Pomegranate: 9200,
+      Orange: 3400,
     },
   },
 
@@ -54,6 +59,11 @@ export const markets: Market[] = [
       Potato: 2020,
       Maize: 2310,
       Gram: 5920,
+      Banana: 1930,
+      Grapes: 6480,
+      Mango: 8850,
+      Pomegranate: 9500,
+      Orange: 3560,
     },
   },
 
@@ -74,6 +84,11 @@ export const markets: Market[] = [
       Potato: 1990,
       Maize: 2290,
       Gram: 5890,
+      Banana: 1890,
+      Grapes: 6310,
+      Mango: 8640,
+      Pomegranate: 9330,
+      Orange: 3470,
     },
   },
 
@@ -94,6 +109,11 @@ export const markets: Market[] = [
       Potato: 1980,
       Maize: 2270,
       Gram: 5870,
+      Banana: 1870,
+      Grapes: 6260,
+      Mango: 8570,
+      Pomegranate: 9270,
+      Orange: 3430,
     },
   },
 
@@ -114,6 +134,11 @@ export const markets: Market[] = [
       Potato: 1910,
       Maize: 2200,
       Gram: 5790,
+      Banana: 1790,
+      Grapes: 6020,
+      Mango: 8260,
+      Pomegranate: 8980,
+      Orange: 3290,
     },
   },
 
@@ -134,6 +159,11 @@ export const markets: Market[] = [
       Potato: 2010,
       Maize: 2300,
       Gram: 5910,
+      Banana: 1980,
+      Grapes: 6390,
+      Mango: 8760,
+      Pomegranate: 9420,
+      Orange: 3520,
     },
   },
 ]
@@ -164,4 +194,3 @@ export function getMarketById(
     (market) => market.id === marketId,
   )
 }
-
