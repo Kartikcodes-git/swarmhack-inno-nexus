@@ -391,6 +391,10 @@ function DemoSteps({ view }: { view: View }) {
 /* Login (mobile + OTP)                                                      */
 /* -------------------------------------------------------------------------- */
 
+/* -------------------------------------------------------------------------- */
+/* Login (mobile + OTP)                                                      */
+/* -------------------------------------------------------------------------- */
+
 function Login({
   role,
   onVerified,
@@ -403,21 +407,29 @@ function Login({
   onBuyerDetails: (name: string, businessName: string) => void
 }) {
   const [phone, setPhone] = useState('')
+  const [otp, setOtp] = useState('')
+  const [sentOtp, setSentOtp] = useState<string | null>(null)
+
   const [farmerName, setLocalFarmerName] = useState('')
   const [buyerName, setBuyerName] = useState('')
   const [businessName, setBusinessName] = useState('')
+
   const [farmerId, setFarmerId] = useState<File | null>(null)
+  const [qualityCertificate, setQualityCertificate] =
+    useState<File | null>(null)
+
   const [error, setError] = useState('')
 
   const isValidPhone = /^\d{10}$/.test(phone)
+  const isValidOtp = /^\d{4}$/.test(otp)
 
-  const isValidFarmerDetails =
-    farmerName.trim().length > 0
+  const isValidFarmerDetails = farmerName.trim().length > 0
 
   const isValidBuyerDetails =
-    buyerName.trim().length > 0 && businessName.trim().length > 0
+    buyerName.trim().length > 0 &&
+    businessName.trim().length > 0
 
-  function submit() {
+  function sendOtp() {
     if (!isValidPhone) {
       setError('Enter a valid 10-digit mobile number')
       return
@@ -439,10 +451,30 @@ function Login({
 
     setError('')
 
+    // Demo OTP for prototype
+    const generated = String(
+      Math.floor(1000 + Math.random() * 9000),
+    )
+
+    setSentOtp(generated)
+    setOtp('')
+  }
+
+  function verifyOtp() {
+    if (!sentOtp || otp !== sentOtp) {
+      setError('Incorrect OTP. Try again.')
+      return
+    }
+
+    setError('')
+
     if (role === 'farmer') {
       onFarmerName(farmerName.trim())
     } else {
-      onBuyerDetails(buyerName.trim(), businessName.trim())
+      onBuyerDetails(
+        buyerName.trim(),
+        businessName.trim(),
+      )
     }
 
     onVerified(phone)
@@ -451,15 +483,20 @@ function Login({
   return (
     <div className="flex min-h-screen items-center justify-center bg-background p-6">
       <div className="w-full max-w-md space-y-8">
+
         <div className="text-center">
           <Logo />
         </div>
 
         <div className="rounded-3xl border border-border bg-card p-7 shadow-sm">
+
           <div className="flex items-center justify-center gap-2">
             <ShieldCheck className="size-5 text-primary" />
+
             <h1 className="font-serif text-2xl font-bold">
-              {role === 'farmer' ? 'Farmer Login' : 'Buyer Login'}
+              {role === 'farmer'
+                ? 'Farmer Login'
+                : 'Buyer Login'}
             </h1>
           </div>
 
@@ -467,11 +504,16 @@ function Login({
             Enter your details to continue
           </p>
 
-          {role === 'farmer' ? (
+          {!sentOtp ? (
+            <>
+              {/* FARMER */}
+              {role === 'farmer' ? (
                 <label className="mt-6 block space-y-2">
                   <span className="text-sm font-semibold">
-                    Farmer name <span className="text-destructive">*</span>
+                    Farmer name{' '}
+                    <span className="text-destructive">*</span>
                   </span>
+
                   <input
                     type="text"
                     value={farmerName}
@@ -484,11 +526,14 @@ function Login({
                   />
                 </label>
               ) : (
+                /* BUYER */
                 <>
                   <label className="mt-6 block space-y-2">
                     <span className="text-sm font-semibold">
-                      Buyer name <span className="text-destructive">*</span>
+                      Buyer name{' '}
+                      <span className="text-destructive">*</span>
                     </span>
+
                     <input
                       type="text"
                       value={buyerName}
@@ -506,6 +551,7 @@ function Login({
                       Business / Organization name{' '}
                       <span className="text-destructive">*</span>
                     </span>
+
                     <input
                       type="text"
                       value={businessName}
@@ -520,20 +566,27 @@ function Login({
                 </>
               )}
 
+              {/* MOBILE NUMBER */}
               <label className="mt-5 block space-y-2">
                 <span className="text-sm font-semibold">
-                  Mobile number <span className="text-destructive">*</span>
+                  Mobile number{' '}
+                  <span className="text-destructive">*</span>
                 </span>
 
                 <div className="relative">
                   <Phone className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+
                   <input
                     type="tel"
                     inputMode="numeric"
                     maxLength={10}
                     value={phone}
                     onChange={(e) => {
-                      setPhone(e.target.value.replace(/\D/g, '').slice(0, 10))
+                      setPhone(
+                        e.target.value
+                          .replace(/\D/g, '')
+                          .slice(0, 10),
+                      )
                       setError('')
                     }}
                     placeholder="10-digit mobile number"
@@ -542,6 +595,7 @@ function Login({
                 </div>
               </label>
 
+              {/* OPTIONAL FARMER ID */}
               {role === 'farmer' && (
                 <>
                   <label className="mt-5 block space-y-2">
@@ -551,41 +605,121 @@ function Login({
                         (optional)
                       </span>
                     </span>
+
                     <span className="block text-xs text-muted-foreground">
                       Digital Farmer ID (Kisan Pehchan Patra)
                     </span>
+
                     <input
                       type="file"
                       accept=".pdf,.jpg,.jpeg,.png"
                       onChange={(e) => {
-                        setFarmerId(e.target.files?.[0] ?? null)
+                        setFarmerId(
+                          e.target.files?.[0] ?? null,
+                        )
                         setError('')
                       }}
                       className="block w-full cursor-pointer rounded-xl border border-input bg-background p-3 text-sm file:mr-4 file:rounded-lg file:border-0 file:bg-primary file:px-3 file:py-2 file:text-sm file:font-semibold file:text-primary-foreground"
                     />
+
                     {farmerId && (
-                      <p className="text-xs text-primary">✓ {farmerId.name}</p>
+                      <p className="text-xs text-primary">
+                        ✓ {farmerId.name}
+                      </p>
                     )}
                   </label>
+
 
                 </>
               )}
 
               {error && (
-                <p className="mt-3 text-xs text-destructive">{error}</p>
+                <p className="mt-3 text-xs text-destructive">
+                  {error}
+                </p>
               )}
 
-          <button
-            type="button"
-            onClick={submit}
-            disabled={
-              !isValidPhone ||
-              (role === 'farmer' ? !isValidFarmerDetails : !isValidBuyerDetails)
-            }
-            className="mt-6 flex min-h-12 w-full items-center justify-center rounded-xl bg-primary font-bold text-primary-foreground disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            Continue
-          </button>
+              {/* SEND OTP */}
+              <button
+                type="button"
+                onClick={sendOtp}
+                disabled={
+                  !isValidPhone ||
+                  (role === 'farmer'
+                    ? !isValidFarmerDetails
+                    : !isValidBuyerDetails)
+                }
+                className="mt-6 flex min-h-12 w-full items-center justify-center rounded-xl bg-primary font-bold text-primary-foreground disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Send OTP
+              </button>
+            </>
+          ) : (
+            /* OTP SCREEN */
+            <>
+              <div className="mt-6 rounded-xl bg-primary/10 p-4 text-center">
+                <p className="text-sm text-muted-foreground">
+                  OTP sent to +91 {phone}
+                </p>
+
+                <p className="mt-2 text-lg font-bold text-primary">
+                  Demo OTP: {sentOtp}
+                </p>
+              </div>
+
+              <label className="mt-5 block space-y-2">
+                <span className="text-sm font-semibold">
+                  Enter OTP
+                </span>
+
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  maxLength={4}
+                  value={otp}
+                  onChange={(e) => {
+                    setOtp(
+                      e.target.value
+                        .replace(/\D/g, '')
+                        .slice(0, 4),
+                    )
+                    setError('')
+                  }}
+                  placeholder="4-digit OTP"
+                  className="h-12 w-full rounded-xl border border-input bg-background px-3 text-center text-lg tracking-[0.5em]"
+                />
+              </label>
+
+              {error && (
+                <p className="mt-2 text-xs text-destructive">
+                  {error}
+                </p>
+              )}
+
+              {/* VERIFY */}
+              <button
+                type="button"
+                disabled={!isValidOtp}
+                onClick={verifyOtp}
+                className="mt-5 flex min-h-12 w-full items-center justify-center rounded-xl bg-primary font-bold text-primary-foreground disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Verify &amp; Continue
+              </button>
+
+              {/* CHANGE DETAILS */}
+              <button
+                type="button"
+                onClick={() => {
+                  setSentOtp(null)
+                  setOtp('')
+                  setError('')
+                }}
+                className="mt-3 w-full text-center text-xs font-semibold text-muted-foreground"
+              >
+                Change details
+              </button>
+            </>
+          )}
         </div>
       </div>
     </div>
@@ -708,6 +842,9 @@ function Dashboard({
   setFarmerName: (name: string) => void
   t: Labels
 }) {
+  const [qualityCertificate, setQualityCertificate] =
+    useState<File | null>(null)
+
   return (
     <div className="space-y-8">
       <section>
@@ -788,6 +925,7 @@ function Dashboard({
         </div>
 
         <div className="mt-7 grid gap-4 md:grid-cols-3">
+          {/* Crop */}
           <label className="space-y-2">
             <span className="text-xs font-semibold text-primary-foreground/70">
               {t.crop}
@@ -825,6 +963,7 @@ function Dashboard({
             </select>
           </label>
 
+          {/* Quantity */}
           <label className="space-y-2">
             <span className="text-xs font-semibold text-primary-foreground/70">
               {t.quantity}
@@ -838,10 +977,12 @@ function Dashboard({
                 value={quantity}
                 onChange={(event) => {
                   const value = Number(event.target.value)
+
                   const capped = Math.min(
                     Number.isFinite(value) ? value : 0,
                     unit === 'kg' ? 100000 : 1000,
                   )
+
                   setQuantity(capped)
                 }}
                 className="min-w-0 flex-1 bg-transparent px-3 font-semibold outline-none"
@@ -866,6 +1007,7 @@ function Dashboard({
             </div>
           </label>
 
+          {/* Location */}
           <label className="space-y-2">
             <span className="text-xs font-semibold text-primary-foreground/70">
               {t.location}
@@ -891,12 +1033,52 @@ function Dashboard({
           </label>
         </div>
 
+        {/* Quantity validation */}
         {quantity <= 0 && (
           <p className="mt-3 text-sm font-bold text-accent">
             Enter a quantity greater than 0.
           </p>
         )}
 
+        {/* Quality Certificate */}
+        <div className="mt-5">
+          <label className="block">
+            <span className="text-xs font-semibold text-primary-foreground/70">
+              Quality Certificate{' '}
+              <span className="font-normal">
+                (optional)
+              </span>
+            </span>
+
+            <span className="mt-1 block text-xs text-primary-foreground/60">
+              Upload an approved quality certificate for your crop
+            </span>
+
+            <div className="mt-2 flex min-h-12 items-center gap-3 rounded-xl border border-primary-foreground/20 bg-primary-foreground/10 px-3">
+              <label className="flex min-h-10 cursor-pointer items-center rounded-lg bg-primary-foreground px-4 text-sm font-bold text-primary">
+                Choose File
+
+                <input
+                  type="file"
+                  accept=".pdf,.jpg,.jpeg,.png"
+                  className="hidden"
+                  onChange={(event) => {
+                    const file = event.target.files?.[0] ?? null
+                    setQualityCertificate(file)
+                  }}
+                />
+              </label>
+
+              <span className="min-w-0 truncate text-sm">
+                {qualityCertificate
+                  ? qualityCertificate.name
+                  : 'No file chosen'}
+              </span>
+            </div>
+          </label>
+        </div>
+
+        {/* Actions */}
         <div className="mt-6 flex flex-wrap gap-3">
           <button
             type="button"
@@ -918,12 +1100,15 @@ function Dashboard({
         </div>
       </section>
 
+      {/* Stats */}
       <div className="grid gap-4 sm:grid-cols-3">
         <Stat
           label={`Today's ${crop.name} Price`}
           value={
             topRecommendation
-              ? `${money(topRecommendation.revenue.pricePerQuintal)}/q`
+              ? `${money(
+                  topRecommendation.revenue.pricePerQuintal,
+                )}/q`
               : '—'
           }
           note="Best available market price"
@@ -1426,8 +1611,8 @@ function SpoilageForecast({
               <tr
                 key={point.day}
                 className={`border-t border-border ${bestDay?.day === point.day
-                    ? 'bg-primary/5 font-bold text-primary'
-                    : ''
+                  ? 'bg-primary/5 font-bold text-primary'
+                  : ''
                   }`}
               >
                 <td className="py-2">Day {point.day}</td>
@@ -1452,8 +1637,8 @@ function SpoilageForecast({
         <p className="mt-4 text-sm font-bold text-primary">
           {bestDay.effectiveRevenue > sellTodayRevenue
             ? `Waiting until Day ${bestDay.day} nets ~${money(
-                bestDay.effectiveRevenue - sellTodayRevenue,
-              )} more, even after spoilage loss.`
+              bestDay.effectiveRevenue - sellTodayRevenue,
+            )} more, even after spoilage loss.`
             : 'Spoilage outweighs any price gain — selling today is the safer estimate.'}
         </p>
       )}
@@ -1997,13 +2182,12 @@ function Trends({
 
           <div className="flex flex-col items-end gap-2">
             <span
-              className={`rounded-full px-3 py-1 text-xs font-bold ${
-                stats.trend === 'Increasing'
-                  ? 'bg-emerald-100 text-emerald-800'
-                  : stats.trend === 'Decreasing'
-                    ? 'bg-red-100 text-red-800'
-                    : 'bg-muted text-muted-foreground'
-              }`}
+              className={`rounded-full px-3 py-1 text-xs font-bold ${stats.trend === 'Increasing'
+                ? 'bg-emerald-100 text-emerald-800'
+                : stats.trend === 'Decreasing'
+                  ? 'bg-red-100 text-red-800'
+                  : 'bg-muted text-muted-foreground'
+                }`}
             >
               {stats.trend === 'Increasing'
                 ? '↑ Increasing'
@@ -2013,11 +2197,10 @@ function Trends({
             </span>
 
             <span
-              className={`rounded-full px-2.5 py-1 text-[10px] font-bold ${
-                liveStatus === 'live'
-                  ? 'bg-primary/10 text-primary'
-                  : 'bg-muted text-muted-foreground'
-              }`}
+              className={`rounded-full px-2.5 py-1 text-[10px] font-bold ${liveStatus === 'live'
+                ? 'bg-primary/10 text-primary'
+                : 'bg-muted text-muted-foreground'
+                }`}
             >
               {liveStatus === 'loading'
                 ? 'Checking live price…'
@@ -2756,13 +2939,13 @@ export default function Page() {
               {(role === 'buyer'
                 ? [[t.buyerMarketplaceTag, 'marketplace']]
                 : [
-                    [t.dashboard, 'dashboard'],
-                    [t.markets, 'comparison'],
-                    [t.recommendation, 'recommendation'],
-                    [t.logisticsTag, 'logistics'],
-                    [t.trends, 'trends'],
-                    [t.offers, 'offers'],
-                  ]
+                  [t.dashboard, 'dashboard'],
+                  [t.markets, 'comparison'],
+                  [t.recommendation, 'recommendation'],
+                  [t.logisticsTag, 'logistics'],
+                  [t.trends, 'trends'],
+                  [t.offers, 'offers'],
+                ]
               ).map(([label, target]) => (
                 <button
                   type="button"
