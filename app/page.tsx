@@ -389,17 +389,25 @@ function Login({
 }: {
   role: 'farmer' | 'buyer'
   onBack: () => void
-  onVerified: (phone: string) => void
+  onVerified: (phone: string, name: string) => void
 }) {
+  const [name, setName] = useState('')
   const [phone, setPhone] = useState('')
+  const [idFileName, setIdFileName] = useState('')
   const [otp, setOtp] = useState('')
   const [sentOtp, setSentOtp] = useState<string | null>(null)
   const [error, setError] = useState('')
 
   const isValidPhone = /^\d{10}$/.test(phone)
   const isValidOtp = /^\d{4}$/.test(otp)
+  const isValidName = name.trim().length > 0
 
   function sendOtp() {
+    if (!isValidName) {
+      setError('Enter your full name')
+      return
+    }
+
     if (!isValidPhone) {
       setError('Enter a valid 10-digit mobile number')
       return
@@ -423,11 +431,15 @@ function Login({
       return
     }
 
-    onVerified(phone)
+    onVerified(phone, name.trim())
   }
 
   const roleLabel = role === 'farmer' ? 'Farmer' : 'Buyer'
   const roleIcon = role === 'farmer' ? '🌾' : '🛒'
+  const idUploadLabel =
+    role === 'farmer'
+      ? 'Digital Farmer ID (Kisan Pehchan Patra)'
+      : 'Business / Trade License'
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-background p-6">
@@ -463,7 +475,21 @@ function Login({
             <>
               <label className="mt-6 block space-y-2">
                 <span className="text-sm font-semibold">
-                  Mobile number
+                  {roleLabel} name <span className="text-destructive">*</span>
+                </span>
+
+                <input
+                  type="text"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  placeholder="Enter your full name"
+                  className="h-12 w-full rounded-xl border border-input bg-background px-3"
+                />
+              </label>
+
+              <label className="mt-4 block space-y-2">
+                <span className="text-sm font-semibold">
+                  Mobile number <span className="text-destructive">*</span>
                 </span>
 
                 <div className="relative">
@@ -485,6 +511,34 @@ function Login({
                 </div>
               </label>
 
+              <div className="mt-4 space-y-2">
+                <span className="text-sm font-semibold">
+                  Upload ID (optional)
+                </span>
+
+                <p className="text-xs text-muted-foreground">
+                  {idUploadLabel}
+                </p>
+
+                <label className="flex h-12 w-full items-center gap-3 rounded-xl border border-input bg-background px-3">
+                  <span className="rounded-lg bg-primary px-3 py-1.5 text-xs font-bold text-primary-foreground">
+                    Choose File
+                  </span>
+
+                  <span className="truncate text-sm text-muted-foreground">
+                    {idFileName || 'No file chosen'}
+                  </span>
+
+                  <input
+                    type="file"
+                    className="sr-only"
+                    onChange={(e) =>
+                      setIdFileName(e.target.files?.[0]?.name ?? '')
+                    }
+                  />
+                </label>
+              </div>
+
               {error && (
                 <p className="mt-2 text-xs text-destructive">
                   {error}
@@ -493,7 +547,7 @@ function Login({
 
               <button
                 type="button"
-                disabled={!isValidPhone}
+                disabled={!isValidPhone || !isValidName}
                 onClick={sendOtp}
                 className="mt-5 flex min-h-12 w-full items-center justify-center rounded-xl bg-primary font-bold text-primary-foreground disabled:cursor-not-allowed disabled:opacity-50"
               >
@@ -679,6 +733,8 @@ function Dashboard({
   setFarmerName: (name: string) => void
   t: Labels
 }) {
+  const [certificateFileName, setCertificateFileName] = useState('')
+
   return (
     <div className="space-y-8">
       <section>
@@ -859,6 +915,34 @@ function Dashboard({
             Enter a quantity greater than 0.
           </p>
         )}
+
+        <div className="mt-6 space-y-2">
+          <span className="text-xs font-semibold text-primary-foreground/70">
+            Quality Certificate (optional)
+          </span>
+
+          <p className="text-xs text-primary-foreground/70">
+            Upload an approved quality certificate for your crop
+          </p>
+
+          <label className="flex h-12 w-full items-center gap-3 rounded-xl border border-primary-foreground/20 bg-primary-foreground/10 px-3">
+            <span className="rounded-lg bg-primary-foreground px-3 py-1.5 text-xs font-bold text-primary">
+              Choose File
+            </span>
+
+            <span className="truncate text-sm text-primary-foreground/80">
+              {certificateFileName || 'No file chosen'}
+            </span>
+
+            <input
+              type="file"
+              className="sr-only"
+              onChange={(e) =>
+                setCertificateFileName(e.target.files?.[0]?.name ?? '')
+              }
+            />
+          </label>
+        </div>
 
         <div className="mt-6 flex flex-wrap gap-3">
           <button
@@ -2648,8 +2732,13 @@ export default function Page() {
       <Login
         role={role}
         onBack={() => setRole(null)}
-        onVerified={(verifiedPhone) => {
+        onVerified={(verifiedPhone, verifiedName) => {
           setPhone(verifiedPhone)
+
+          if (role === 'farmer' && verifiedName) {
+            setFarmerName(verifiedName)
+          }
+
           setView(
             role === 'buyer' ? 'marketplace' : 'dashboard',
           )
