@@ -68,16 +68,7 @@ import {
 import { Logistics } from '@/components/logistics'
 import { Phase4QuickAccess } from '@/components/phase4'
 
-import {
-  crops,
-  cropCategories,
-  getCropsByCategory,
-  type Crop,
-} from '@/lib/crops'
-import {
-  seedRatings,
-  type FarmerRating,
-} from '@/lib/ratings'
+import { crops, type Crop } from '@/lib/crops'
 
 type View =
   | 'dashboard'
@@ -391,43 +382,18 @@ function DemoSteps({ view }: { view: View }) {
 /* Login (mobile + OTP)                                                      */
 /* -------------------------------------------------------------------------- */
 
-/* -------------------------------------------------------------------------- */
-/* Login (mobile + OTP)                                                      */
-/* -------------------------------------------------------------------------- */
-
 function Login({
-  role,
   onVerified,
-  onFarmerName,
-  onBuyerDetails,
 }: {
-  role: 'farmer' | 'buyer'
   onVerified: (phone: string) => void
-  onFarmerName: (name: string) => void
-  onBuyerDetails: (name: string, businessName: string) => void
 }) {
   const [phone, setPhone] = useState('')
   const [otp, setOtp] = useState('')
   const [sentOtp, setSentOtp] = useState<string | null>(null)
-
-  const [farmerName, setLocalFarmerName] = useState('')
-  const [buyerName, setBuyerName] = useState('')
-  const [businessName, setBusinessName] = useState('')
-
-  const [farmerId, setFarmerId] = useState<File | null>(null)
-  const [qualityCertificate, setQualityCertificate] =
-    useState<File | null>(null)
-
   const [error, setError] = useState('')
 
   const isValidPhone = /^\d{10}$/.test(phone)
   const isValidOtp = /^\d{4}$/.test(otp)
-
-  const isValidFarmerDetails = farmerName.trim().length > 0
-
-  const isValidBuyerDetails =
-    buyerName.trim().length > 0 &&
-    businessName.trim().length > 0
 
   function sendOtp() {
     if (!isValidPhone) {
@@ -435,23 +401,10 @@ function Login({
       return
     }
 
-    if (role === 'farmer' && !isValidFarmerDetails) {
-      setError('Please enter your name')
-      return
-    }
-
-    if (role === 'buyer' && !isValidBuyerDetails) {
-      if (!buyerName.trim()) {
-        setError('Please enter your name')
-      } else {
-        setError('Please enter your business or organization name')
-      }
-      return
-    }
-
     setError('')
 
-    // Demo OTP for prototype
+    // Prototype only: OTP simulated locally, shown on screen.
+    // Real deployment wires this to an SMS/OTP provider.
     const generated = String(
       Math.floor(1000 + Math.random() * 9000),
     )
@@ -461,20 +414,9 @@ function Login({
   }
 
   function verifyOtp() {
-    if (!sentOtp || otp !== sentOtp) {
+    if (otp !== sentOtp) {
       setError('Incorrect OTP. Try again.')
       return
-    }
-
-    setError('')
-
-    if (role === 'farmer') {
-      onFarmerName(farmerName.trim())
-    } else {
-      onBuyerDetails(
-        buyerName.trim(),
-        businessName.trim(),
-      )
     }
 
     onVerified(phone)
@@ -483,94 +425,28 @@ function Login({
   return (
     <div className="flex min-h-screen items-center justify-center bg-background p-6">
       <div className="w-full max-w-md space-y-8">
-
         <div className="text-center">
           <Logo />
         </div>
 
         <div className="rounded-3xl border border-border bg-card p-7 shadow-sm">
-
           <div className="flex items-center justify-center gap-2">
             <ShieldCheck className="size-5 text-primary" />
 
             <h1 className="font-serif text-2xl font-bold">
-              {role === 'farmer'
-                ? 'Farmer Login'
-                : 'Buyer Login'}
+              Log in
             </h1>
           </div>
 
           <p className="mt-2 text-center text-sm text-muted-foreground">
-            Enter your details to continue
+            Enter your mobile number to continue
           </p>
 
           {!sentOtp ? (
             <>
-              {/* FARMER */}
-              {role === 'farmer' ? (
-                <label className="mt-6 block space-y-2">
-                  <span className="text-sm font-semibold">
-                    Farmer name{' '}
-                    <span className="text-destructive">*</span>
-                  </span>
-
-                  <input
-                    type="text"
-                    value={farmerName}
-                    onChange={(e) => {
-                      setLocalFarmerName(e.target.value)
-                      setError('')
-                    }}
-                    placeholder="Enter your full name"
-                    className="h-12 w-full rounded-xl border border-input bg-background px-3"
-                  />
-                </label>
-              ) : (
-                /* BUYER */
-                <>
-                  <label className="mt-6 block space-y-2">
-                    <span className="text-sm font-semibold">
-                      Buyer name{' '}
-                      <span className="text-destructive">*</span>
-                    </span>
-
-                    <input
-                      type="text"
-                      value={buyerName}
-                      onChange={(e) => {
-                        setBuyerName(e.target.value)
-                        setError('')
-                      }}
-                      placeholder="Enter your full name"
-                      className="h-12 w-full rounded-xl border border-input bg-background px-3"
-                    />
-                  </label>
-
-                  <label className="mt-5 block space-y-2">
-                    <span className="text-sm font-semibold">
-                      Business / Organization name{' '}
-                      <span className="text-destructive">*</span>
-                    </span>
-
-                    <input
-                      type="text"
-                      value={businessName}
-                      onChange={(e) => {
-                        setBusinessName(e.target.value)
-                        setError('')
-                      }}
-                      placeholder="Enter business or organization name"
-                      className="h-12 w-full rounded-xl border border-input bg-background px-3"
-                    />
-                  </label>
-                </>
-              )}
-
-              {/* MOBILE NUMBER */}
-              <label className="mt-5 block space-y-2">
+              <label className="mt-6 block space-y-2">
                 <span className="text-sm font-semibold">
-                  Mobile number{' '}
-                  <span className="text-destructive">*</span>
+                  Mobile number
                 </span>
 
                 <div className="relative">
@@ -581,93 +457,42 @@ function Login({
                     inputMode="numeric"
                     maxLength={10}
                     value={phone}
-                    onChange={(e) => {
+                    onChange={(e) =>
                       setPhone(
-                        e.target.value
-                          .replace(/\D/g, '')
-                          .slice(0, 10),
+                        e.target.value.replace(/\D/g, '').slice(0, 10),
                       )
-                      setError('')
-                    }}
+                    }
                     placeholder="10-digit mobile number"
                     className="h-12 w-full rounded-xl border border-input bg-background pl-9 pr-3"
                   />
                 </div>
               </label>
 
-              {/* OPTIONAL FARMER ID */}
-              {role === 'farmer' && (
-                <>
-                  <label className="mt-5 block space-y-2">
-                    <span className="text-sm font-semibold">
-                      Upload ID{' '}
-                      <span className="font-normal text-muted-foreground">
-                        (optional)
-                      </span>
-                    </span>
-
-                    <span className="block text-xs text-muted-foreground">
-                      Digital Farmer ID (Kisan Pehchan Patra)
-                    </span>
-
-                    <input
-                      type="file"
-                      accept=".pdf,.jpg,.jpeg,.png"
-                      onChange={(e) => {
-                        setFarmerId(
-                          e.target.files?.[0] ?? null,
-                        )
-                        setError('')
-                      }}
-                      className="block w-full cursor-pointer rounded-xl border border-input bg-background p-3 text-sm file:mr-4 file:rounded-lg file:border-0 file:bg-primary file:px-3 file:py-2 file:text-sm file:font-semibold file:text-primary-foreground"
-                    />
-
-                    {farmerId && (
-                      <p className="text-xs text-primary">
-                        ✓ {farmerId.name}
-                      </p>
-                    )}
-                  </label>
-
-
-                </>
-              )}
-
               {error && (
-                <p className="mt-3 text-xs text-destructive">
+                <p className="mt-2 text-xs text-destructive">
                   {error}
                 </p>
               )}
 
-              {/* SEND OTP */}
               <button
                 type="button"
+                disabled={!isValidPhone}
                 onClick={sendOtp}
-                disabled={
-                  !isValidPhone ||
-                  (role === 'farmer'
-                    ? !isValidFarmerDetails
-                    : !isValidBuyerDetails)
-                }
-                className="mt-6 flex min-h-12 w-full items-center justify-center rounded-xl bg-primary font-bold text-primary-foreground disabled:cursor-not-allowed disabled:opacity-50"
+                className="mt-5 flex min-h-12 w-full items-center justify-center rounded-xl bg-primary font-bold text-primary-foreground disabled:cursor-not-allowed disabled:opacity-50"
               >
                 Send OTP
               </button>
             </>
           ) : (
-            /* OTP SCREEN */
             <>
-              <div className="mt-6 rounded-xl bg-primary/10 p-4 text-center">
-                <p className="text-sm text-muted-foreground">
-                  OTP sent to +91 {phone}
-                </p>
+              <p className="mt-6 text-sm text-muted-foreground">
+                OTP sent to +91 {phone}.{' '}
+                <span className="font-bold text-primary">
+                  (demo OTP: {sentOtp})
+                </span>
+              </p>
 
-                <p className="mt-2 text-lg font-bold text-primary">
-                  Demo OTP: {sentOtp}
-                </p>
-              </div>
-
-              <label className="mt-5 block space-y-2">
+              <label className="mt-4 block space-y-2">
                 <span className="text-sm font-semibold">
                   Enter OTP
                 </span>
@@ -677,14 +502,11 @@ function Login({
                   inputMode="numeric"
                   maxLength={4}
                   value={otp}
-                  onChange={(e) => {
+                  onChange={(e) =>
                     setOtp(
-                      e.target.value
-                        .replace(/\D/g, '')
-                        .slice(0, 4),
+                      e.target.value.replace(/\D/g, '').slice(0, 4),
                     )
-                    setError('')
-                  }}
+                  }
                   placeholder="4-digit OTP"
                   className="h-12 w-full rounded-xl border border-input bg-background px-3 text-center text-lg tracking-[0.5em]"
                 />
@@ -696,7 +518,6 @@ function Login({
                 </p>
               )}
 
-              {/* VERIFY */}
               <button
                 type="button"
                 disabled={!isValidOtp}
@@ -706,7 +527,6 @@ function Login({
                 Verify &amp; Continue
               </button>
 
-              {/* CHANGE DETAILS */}
               <button
                 type="button"
                 onClick={() => {
@@ -716,7 +536,7 @@ function Login({
                 }}
                 className="mt-3 w-full text-center text-xs font-semibold text-muted-foreground"
               >
-                Change details
+                Change number
               </button>
             </>
           )}
@@ -842,9 +662,6 @@ function Dashboard({
   setFarmerName: (name: string) => void
   t: Labels
 }) {
-  const [qualityCertificate, setQualityCertificate] =
-    useState<File | null>(null)
-
   return (
     <div className="space-y-8">
       <section>
@@ -925,7 +742,6 @@ function Dashboard({
         </div>
 
         <div className="mt-7 grid gap-4 md:grid-cols-3">
-          {/* Crop */}
           <label className="space-y-2">
             <span className="text-xs font-semibold text-primary-foreground/70">
               {t.crop}
@@ -943,27 +759,18 @@ function Dashboard({
               }}
               className="h-12 w-full rounded-xl border border-primary-foreground/20 bg-primary-foreground/10 px-3 font-semibold outline-none"
             >
-              {cropCategories.map((category) => (
-                <optgroup
-                  key={category}
-                  label={category}
+              {crops.map((item) => (
+                <option
+                  key={item.name}
+                  value={item.name}
                   className="text-foreground"
                 >
-                  {getCropsByCategory(category).map((item) => (
-                    <option
-                      key={item.name}
-                      value={item.name}
-                      className="text-foreground"
-                    >
-                      {item.icon} {item.name}
-                    </option>
-                  ))}
-                </optgroup>
+                  {item.icon} {item.name}
+                </option>
               ))}
             </select>
           </label>
 
-          {/* Quantity */}
           <label className="space-y-2">
             <span className="text-xs font-semibold text-primary-foreground/70">
               {t.quantity}
@@ -977,12 +784,10 @@ function Dashboard({
                 value={quantity}
                 onChange={(event) => {
                   const value = Number(event.target.value)
-
                   const capped = Math.min(
                     Number.isFinite(value) ? value : 0,
                     unit === 'kg' ? 100000 : 1000,
                   )
-
                   setQuantity(capped)
                 }}
                 className="min-w-0 flex-1 bg-transparent px-3 font-semibold outline-none"
@@ -1007,7 +812,6 @@ function Dashboard({
             </div>
           </label>
 
-          {/* Location */}
           <label className="space-y-2">
             <span className="text-xs font-semibold text-primary-foreground/70">
               {t.location}
@@ -1033,52 +837,12 @@ function Dashboard({
           </label>
         </div>
 
-        {/* Quantity validation */}
         {quantity <= 0 && (
           <p className="mt-3 text-sm font-bold text-accent">
             Enter a quantity greater than 0.
           </p>
         )}
 
-        {/* Quality Certificate */}
-        <div className="mt-5">
-          <label className="block">
-            <span className="text-xs font-semibold text-primary-foreground/70">
-              Quality Certificate{' '}
-              <span className="font-normal">
-                (optional)
-              </span>
-            </span>
-
-            <span className="mt-1 block text-xs text-primary-foreground/60">
-              Upload an approved quality certificate for your crop
-            </span>
-
-            <div className="mt-2 flex min-h-12 items-center gap-3 rounded-xl border border-primary-foreground/20 bg-primary-foreground/10 px-3">
-              <label className="flex min-h-10 cursor-pointer items-center rounded-lg bg-primary-foreground px-4 text-sm font-bold text-primary">
-                Choose File
-
-                <input
-                  type="file"
-                  accept=".pdf,.jpg,.jpeg,.png"
-                  className="hidden"
-                  onChange={(event) => {
-                    const file = event.target.files?.[0] ?? null
-                    setQualityCertificate(file)
-                  }}
-                />
-              </label>
-
-              <span className="min-w-0 truncate text-sm">
-                {qualityCertificate
-                  ? qualityCertificate.name
-                  : 'No file chosen'}
-              </span>
-            </div>
-          </label>
-        </div>
-
-        {/* Actions */}
         <div className="mt-6 flex flex-wrap gap-3">
           <button
             type="button"
@@ -1100,15 +864,12 @@ function Dashboard({
         </div>
       </section>
 
-      {/* Stats */}
       <div className="grid gap-4 sm:grid-cols-3">
         <Stat
           label={`Today's ${crop.name} Price`}
           value={
             topRecommendation
-              ? `${money(
-                  topRecommendation.revenue.pricePerQuintal,
-                )}/q`
+              ? `${money(topRecommendation.revenue.pricePerQuintal)}/q`
               : '—'
           }
           note="Best available market price"
@@ -1197,7 +958,7 @@ function Transparency() {
       'Previously synchronized information for offline mode.',
     ],
     [
-      'Market Forecast and Design Engine',
+      'Prototype Forecast',
       'Illustrative, not guaranteed.',
     ],
     [
@@ -1611,8 +1372,8 @@ function SpoilageForecast({
               <tr
                 key={point.day}
                 className={`border-t border-border ${bestDay?.day === point.day
-                  ? 'bg-primary/5 font-bold text-primary'
-                  : ''
+                    ? 'bg-primary/5 font-bold text-primary'
+                    : ''
                   }`}
               >
                 <td className="py-2">Day {point.day}</td>
@@ -1637,8 +1398,8 @@ function SpoilageForecast({
         <p className="mt-4 text-sm font-bold text-primary">
           {bestDay.effectiveRevenue > sellTodayRevenue
             ? `Waiting until Day ${bestDay.day} nets ~${money(
-              bestDay.effectiveRevenue - sellTodayRevenue,
-            )} more, even after spoilage loss.`
+                bestDay.effectiveRevenue - sellTodayRevenue,
+              )} more, even after spoilage loss.`
             : 'Spoilage outweighs any price gain — selling today is the safer estimate.'}
         </p>
       )}
@@ -2182,12 +1943,13 @@ function Trends({
 
           <div className="flex flex-col items-end gap-2">
             <span
-              className={`rounded-full px-3 py-1 text-xs font-bold ${stats.trend === 'Increasing'
-                ? 'bg-emerald-100 text-emerald-800'
-                : stats.trend === 'Decreasing'
-                  ? 'bg-red-100 text-red-800'
-                  : 'bg-muted text-muted-foreground'
-                }`}
+              className={`rounded-full px-3 py-1 text-xs font-bold ${
+                stats.trend === 'Increasing'
+                  ? 'bg-emerald-100 text-emerald-800'
+                  : stats.trend === 'Decreasing'
+                    ? 'bg-red-100 text-red-800'
+                    : 'bg-muted text-muted-foreground'
+              }`}
             >
               {stats.trend === 'Increasing'
                 ? '↑ Increasing'
@@ -2197,10 +1959,11 @@ function Trends({
             </span>
 
             <span
-              className={`rounded-full px-2.5 py-1 text-[10px] font-bold ${liveStatus === 'live'
-                ? 'bg-primary/10 text-primary'
-                : 'bg-muted text-muted-foreground'
-                }`}
+              className={`rounded-full px-2.5 py-1 text-[10px] font-bold ${
+                liveStatus === 'live'
+                  ? 'bg-primary/10 text-primary'
+                  : 'bg-muted text-muted-foreground'
+              }`}
             >
               {liveStatus === 'loading'
                 ? 'Checking live price…'
@@ -2298,7 +2061,7 @@ function Trends({
         onClick={openForecast}
         className="min-h-12 rounded-xl bg-primary px-5 text-sm font-bold text-primary-foreground"
       >
-        Open Market Forecast and Design Engine
+        Open Prototype Forecast
       </button>
     </div>
   )
@@ -2370,7 +2133,7 @@ function Forecast({
         </div>
 
         <span className="rounded-full border border-accent bg-accent/20 px-3 py-1 text-xs font-bold text-accent-foreground">
-          Market Forecast and Design Engine
+          Prototype Forecast
         </span>
       </div>
 
@@ -2694,12 +2457,6 @@ export default function Page() {
   const [farmerName, setFarmerName] =
     useState('')
 
-  const [buyerName, setBuyerName] =
-    useState('')
-
-  const [buyerBusinessName, setBuyerBusinessName] =
-    useState('')
-
   const [crop, setCrop] =
     useState<Crop>(crops[0])
 
@@ -2718,9 +2475,6 @@ export default function Page() {
   const [offers, setOffers] =
     useState<Offer[]>([])
 
-  const [ratings, setRatings] =
-    useState<FarmerRating[]>(seedRatings)
-
   const [offline, setOffline] =
     useState(false)
 
@@ -2731,6 +2485,9 @@ export default function Page() {
     useState<string | null>(null)
 
   const [contactOfferId, setContactOfferId] =
+    useState<string | null>(null)
+
+  const [logisticsOfferId, setLogisticsOfferId] =
     useState<string | null>(null)
 
   const [transportConfirmation, setTransportConfirmation] =
@@ -2770,11 +2527,7 @@ export default function Page() {
 
   const demo = () => {
     setView('dashboard')
-    setRole('farmer')
-    setPhone('demo')
     setFarmerName('')
-    setBuyerName('')
-    setBuyerBusinessName('')
     setCrop(crops[0])
     setQuantity(20)
     setUnit('quintals')
@@ -2786,22 +2539,11 @@ export default function Page() {
     setTransportCost(null)
     setGradingOfferId(null)
     setContactOfferId(null)
+    setLogisticsOfferId(null)
     setTransportConfirmation(null)
   }
 
   const goToGrading = (offerId: string) => {
-    if (role !== 'buyer') {
-      return
-    }
-
-    const acceptedOffer = offers.find(
-      (offer) => offer.id === offerId && offer.status === 'Accepted',
-    )
-
-    if (!acceptedOffer) {
-      return
-    }
-
     setGradingOfferId(offerId)
     setView('grading')
   }
@@ -2833,7 +2575,7 @@ export default function Page() {
     )
 
     setGradingOfferId(null)
-    setView('logistics')
+    setView('offers')
   }
 
   const compare = () => {
@@ -2874,28 +2616,18 @@ export default function Page() {
     netReturn,
   }
 
+  if (!phone) {
+    return <Login onVerified={setPhone} />
+  }
+
   if (!role) {
     return (
       <RoleSelect
         selectRole={(selected) => {
           setRole(selected)
-        }}
-      />
-    )
-  }
-
-  if (!phone) {
-    return (
-      <Login
-        role={role}
-        onVerified={(verifiedPhone) => {
-          setPhone(verifiedPhone)
-          setView(role === 'buyer' ? 'marketplace' : 'dashboard')
-        }}
-        onFarmerName={setFarmerName}
-        onBuyerDetails={(name, businessName) => {
-          setBuyerName(name)
-          setBuyerBusinessName(businessName)
+          setView(
+            selected === 'buyer' ? 'marketplace' : 'dashboard',
+          )
         }}
       />
     )
@@ -2939,13 +2671,13 @@ export default function Page() {
               {(role === 'buyer'
                 ? [[t.buyerMarketplaceTag, 'marketplace']]
                 : [
-                  [t.dashboard, 'dashboard'],
-                  [t.markets, 'comparison'],
-                  [t.recommendation, 'recommendation'],
-                  [t.logisticsTag, 'logistics'],
-                  [t.trends, 'trends'],
-                  [t.offers, 'offers'],
-                ]
+                    [t.dashboard, 'dashboard'],
+                    [t.markets, 'comparison'],
+                    [t.recommendation, 'recommendation'],
+                    [t.logisticsTag, 'logistics'],
+                    [t.trends, 'trends'],
+                    [t.offers, 'offers'],
+                  ]
               ).map(([label, target]) => (
                 <button
                   type="button"
@@ -3072,12 +2804,29 @@ export default function Page() {
                 existingTransportCost={
                   activeMarket.revenue.transportCost
                 }
-                onBack={() =>
+                onBack={() => {
+                  setLogisticsOfferId(null)
                   setView('dashboard')
-                }
+                }}
                 onConfirmTransport={(payload) => {
                   setTransportCost(payload.totalCost)
                   setTransportConfirmation(payload)
+
+                  // Only offers that actually went through
+                  // Buyer Offers → Plan Transport get marked
+                  // completed here — the direct sidebar
+                  // "Logistics" flow (market recommendation,
+                  // no offer involved) leaves offers untouched.
+                  if (logisticsOfferId) {
+                    setOffers((current) =>
+                      current.map((offer) =>
+                        offer.id === logisticsOfferId
+                          ? { ...offer, status: 'completed' }
+                          : offer,
+                      ),
+                    )
+                  }
+
                   setView('transport-confirmed')
                 }}
               />
@@ -3132,10 +2881,6 @@ export default function Page() {
 
           {view === 'marketplace' && (
             <BuyerMarketplace
-              ratings={ratings}
-              setRatings={setRatings}
-              buyerName={buyerName}
-              buyerBusinessName={buyerBusinessName}
               offers={offers}
               context={context}
               setOffers={setOffers}
@@ -3146,17 +2891,17 @@ export default function Page() {
 
           {view === 'offers' && (
             <FarmerOffers
-              farmerName={farmerName}
-              ratings={ratings}
               offers={offers}
               setOffers={setOffers}
               openMarketplace={() =>
                 setView('marketplace')
               }
               context={context}
-              goToLogistics={() =>
+              goToLogistics={(offerId) => {
+                setLogisticsOfferId(offerId)
                 setView('logistics')
-              }
+              }}
+              goToGrading={goToGrading}
               goToContact={goToContact}
             />
           )}
@@ -3166,19 +2911,22 @@ export default function Page() {
               <ContactBuyer
                 offer={contactOffer}
                 back={() => setView('offers')}
-                goToLogistics={() => setView('logistics')}
+                goToLogistics={() => {
+                  setLogisticsOfferId(contactOffer.id)
+                  setView('logistics')
+                }}
               />
             ) : (
               <EmptyState
-                back={() => setView(role === 'buyer' ? 'marketplace' : 'dashboard')}
+                back={() => setView('offers')}
               />
             ))}
 
-          {view === 'grading' && role === 'buyer' &&
+          {view === 'grading' &&
             (gradingOffer ? (
               <GradingScreen
                 offer={gradingOffer}
-                back={() => setView(role === 'buyer' ? 'marketplace' : 'offers')}
+                back={() => setView('offers')}
                 submit={submitGrading}
               />
             ) : (
@@ -3187,6 +2935,7 @@ export default function Page() {
               />
             ))}
 
+          {view === 'dashboard' && <EvaluatorSections />}
         </main>
 
         <MobileNav
