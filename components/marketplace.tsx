@@ -4,7 +4,9 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { Check, MapPin, Phone, Star, X } from 'lucide-react'
 import { useLanguage } from '@/lib/language'
 import { crops } from '@/lib/crops'
-import { locations } from '@/lib/locations'
+import { locations, getLocationLabel } from '@/lib/locations'
+import { api, ApiError } from '@/lib/api-client'
+import type { Listing as BackendListing } from '@/lib/types/db'
 import {
   addRating,
   canBuyerRateFarmer,
@@ -255,6 +257,7 @@ function OfferModal({
     'Interested in purchasing the full quantity.',
   )
   const [error, setError] = useState('')
+  const [submitting, setSubmitting] = useState(false)
 
   const dialogRef = useRef<HTMLDivElement | null>(null)
 
@@ -283,7 +286,11 @@ function OfferModal({
     }
   }, [close])
 
-  const onSubmit = () => {
+  // Real submit: POSTs to the backend so the offer actually persists and
+  // carries the server-verified buyer company (req #5). The previous
+  // version only built a local object with Date.now() as an id and never
+  // called the API — that is why offers never reached anyone.
+  const onSubmit = async () => {
     if (price <= 0) {
       return setError('Offer price must be greater than 0.')
     }
@@ -298,17 +305,37 @@ function OfferModal({
       )
     }
 
-    submit({
-      id: `offer-${Date.now()}`,
-      buyer: buyerBusinessName || buyerName,
-      farmer: listing.farmer,
-      crop: listing.crop,
-      quantity,
-      price,
-      expected: listing.price,
-      location: listing.location,
-      status: 'Pending',
-    })
+    setError('')
+    setSubmitting(true)
+
+    try {
+      const created = await api.offers.create({
+        listingId: listing.id,
+        quantityQuintals: quantity,
+        offerPrice: price,
+        message,
+      })
+
+      submit({
+        id: created.id,
+        buyer: created.buyerCompany,
+        farmer: listing.farmer,
+        crop: listing.crop,
+        quantity: created.quantityQuintals,
+        price: created.offerPrice,
+        expected: listing.price,
+        location: listing.location,
+        status: 'Pending',
+      })
+    } catch (caught) {
+      setError(
+        caught instanceof ApiError
+          ? caught.message
+          : 'Could not submit the offer. Please try again.',
+      )
+    } finally {
+      setSubmitting(false)
+    }
   }
 
   return (
@@ -420,9 +447,10 @@ function OfferModal({
 
           <button
             onClick={onSubmit}
-            className="min-h-12 w-full rounded-xl bg-primary px-5 font-bold text-primary-foreground"
+            disabled={submitting}
+            className="min-h-12 w-full rounded-xl bg-primary px-5 font-bold text-primary-foreground disabled:cursor-not-allowed disabled:opacity-60"
           >
-            Submit Offer
+            {submitting ? 'Submitting…' : 'Submit Offer'}
           </button>
         </div>
       </div>
@@ -788,11 +816,67 @@ export function BuyerMarketplace({
   const [submitted, setSubmitted] = useState<Offer | null>(null)
   const [showMyOffers, setShowMyOffers] = useState(false)
 
-  // Farmer/quantity/quality still prototype data (govt API doesn't have
-  // per-farmer listings) — but price, where a real match exists, comes
-  // from live Maharashtra mandi data instead of the hardcoded number.
+  // Real listings from the backend — replaces the old hardcoded array.
+  // This is the actual UI <-> backend connection: before this, nothing
+  // in this component ever called the API, so nothing could ever fail
+  // OR succeed. Both loading and error are handled explicitly (req #14).
+  const [fetchedListings, setFetchedListings] =
+    useState<Listing[] | null>(null)
+  const [listingsLoading, setListingsLoading] = useState(true)
+  const [listingsError, setListingsError] = useState<string | null>(null)
+
+  useEffect(() => {
+    let cancelled = false
+
+    setListingsLoading(true)
+    setListingsError(null)
+
+    api.listings
+      .list()
+      .then((rows: BackendListing[]) => {
+        if (cancelled) return
+
+        const mapped: Listing[] = rows.map((row) => ({
+          id: row.id,
+          crop: row.cropName,
+          icon: crops.find((c) => c.name === row.cropName)?.icon ?? '🌾',
+          farmer: row.farmerName,
+          location: getLocationLabel(row.locationId).split(',')[0],
+          quantity: row.quantityQuintals,
+          price: row.pricePerQuintal,
+          date: new Date(row.createdAt).toLocaleDateString('en-IN', {
+            day: 'numeric',
+            month: 'short',
+            year: 'numeric',
+          }),
+          quality: `Grade ${row.grade}`,
+          grade: row.grade,
+        }))
+
+        setFetchedListings(mapped)
+      })
+      .catch((error) => {
+        if (cancelled) return
+
+        setListingsError(
+          error instanceof ApiError
+            ? error.message
+            : 'Could not load listings. Check your connection.',
+        )
+      })
+      .finally(() => {
+        if (!cancelled) setListingsLoading(false)
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  // Live Maharashtra mandi price overlay, applied on top of real
+  // backend listings (previously applied on top of a hardcoded array).
   const liveListings = useMemo(() => {
-    return listings.map((listing) => {
+    return (fetchedListings ?? []).map((listing) => {
       const commodity = CROP_TO_COMMODITY[listing.crop]
       const realPrice = commodity ? mandiPrices[commodity] : undefined
 
@@ -800,7 +884,7 @@ export function BuyerMarketplace({
         ? { ...listing, price: realPrice, isLive: true }
         : { ...listing, isLive: false }
     })
-  }, [mandiPrices])
+  }, [fetchedListings, mandiPrices])
 
   const filtered = useMemo(
     () =>
@@ -936,23 +1020,54 @@ export function BuyerMarketplace({
         </div>
       )}
 
-      <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
-        {filtered.map((listing) => (
-          <ListingCard
-            key={listing.id}
-            listing={listing}
-            open={setSelected}
-            isLive={listing.isLive}
-            ratings={ratings}
-          />
-        ))}
-      </div>
+      {listingsLoading && (
+        <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
+          {[1, 2, 3].map((i) => (
+            <div
+              key={i}
+              className="h-48 animate-pulse rounded-2xl border border-border bg-muted"
+            />
+          ))}
+        </div>
+      )}
 
-      {filtered.length === 0 && (
-        <p className="rounded-2xl border border-dashed border-border bg-card p-6 text-center text-sm text-muted-foreground">
-          No listings match this crop/location combination yet in the
-          prototype dataset.
-        </p>
+      {!listingsLoading && listingsError && (
+        <div className="rounded-2xl border border-destructive/30 bg-destructive/5 p-6 text-center">
+          <p className="text-sm font-semibold text-destructive">
+            {listingsError}
+          </p>
+          <button
+            type="button"
+            onClick={() => window.location.reload()}
+            className="mt-3 min-h-10 rounded-xl border border-destructive px-4 text-sm font-bold text-destructive"
+          >
+            Retry
+          </button>
+        </div>
+      )}
+
+      {!listingsLoading && !listingsError && (
+        <>
+          <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
+            {filtered.map((listing) => (
+              <ListingCard
+                key={listing.id}
+                listing={listing}
+                open={setSelected}
+                isLive={listing.isLive}
+                ratings={ratings}
+              />
+            ))}
+          </div>
+
+          {filtered.length === 0 && (
+            <p className="rounded-2xl border border-dashed border-border bg-card p-6 text-center text-sm text-muted-foreground">
+              {(fetchedListings ?? []).length === 0
+                ? 'No listings yet. Be the first farmer to add produce.'
+                : 'No listings match this crop/location/grade combination.'}
+            </p>
+          )}
+        </>
       )}
 
       <BuyerCards />
