@@ -70,6 +70,9 @@ import { Phase4QuickAccess } from '@/components/phase4'
 
 import { crops, type Crop } from '@/lib/crops'
 
+import { supabase } from '@/supabase/client'
+import { api, ApiError } from '@/lib/api-client'
+
 type View =
   | 'dashboard'
   | 'comparison'
@@ -393,18 +396,29 @@ function Login({
 }) {
   const [name, setName] = useState('')
   const [phone, setPhone] = useState('')
+  const [companyName, setCompanyName] = useState('')
   const [idFileName, setIdFileName] = useState('')
   const [otp, setOtp] = useState('')
-  const [sentOtp, setSentOtp] = useState<string | null>(null)
+  const [otpSent, setOtpSent] = useState(false)
+  const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
 
   const isValidPhone = /^\d{10}$/.test(phone)
-  const isValidOtp = /^\d{4}$/.test(otp)
+  const isValidOtp = /^\d{4,6}$/.test(otp)
   const isValidName = name.trim().length > 0
+  const isValidCompany =
+    role === 'buyer' ? companyName.trim().length > 0 : true
 
-  function sendOtp() {
+  const e164Phone = `+91${phone}`
+
+  async function sendOtp() {
     if (!isValidName) {
       setError('Enter your full name')
+      return
+    }
+
+    if (role === 'buyer' && !isValidCompany) {
+      setError('Enter your company / business name')
       return
     }
 
@@ -414,24 +428,88 @@ function Login({
     }
 
     setError('')
+    setSubmitting(true)
 
-    // Prototype only: OTP simulated locally, shown on screen.
-    // Real deployment wires this to an SMS/OTP provider.
-    const generated = String(
-      Math.floor(1000 + Math.random() * 9000),
-    )
+    // Real SMS OTP via Supabase Auth — no more local simulation.
+    const { error: otpError } = await supabase.auth.signInWithOtp({
+      phone: e164Phone,
+    })
 
-    setSentOtp(generated)
+    setSubmitting(false)
+
+    if (otpError) {
+      setError(otpError.message)
+      return
+    }
+
+    setOtpSent(true)
     setOtp('')
   }
 
-  function verifyOtp() {
-    if (otp !== sentOtp) {
+  async function verifyOtp() {
+    setError('')
+    setSubmitting(true)
+
+    const { error: verifyError } = await supabase.auth.verifyOtp({
+      phone: e164Phone,
+      token: otp,
+      type: 'sms',
+    })
+
+    if (verifyError) {
+      setSubmitting(false)
       setError('Incorrect OTP. Try again.')
       return
     }
 
-    onVerified(phone, name.trim())
+    // Session now exists. Create the profile row — or, if this phone
+    // already has one (returning user), just fetch it instead.
+    try {
+      const profileInput =
+        role === 'farmer'
+          ? {
+              role: 'farmer' as const,
+              fullName: name.trim(),
+              phone,
+              locationId: defaultLocation.id,
+              farmerIdUrl: null,
+            }
+          : {
+              role: 'buyer' as const,
+              fullName: name.trim(),
+              phone,
+              companyName: companyName.trim(),
+            }
+
+      const profile = await api.profile.create(profileInput)
+      setSubmitting(false)
+      onVerified(phone, profile.fullName)
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 409) {
+        // Already signed up before — just load the existing profile.
+        try {
+          const profile = await api.profile.me()
+          setSubmitting(false)
+          onVerified(phone, profile.fullName)
+          return
+        } catch (fetchErr) {
+          setSubmitting(false)
+          setError(
+            fetchErr instanceof ApiError
+              ? fetchErr.message
+              : 'Could not load your profile.',
+          )
+          return
+        }
+      }
+
+      setSubmitting(false)
+      setError(
+        err instanceof ApiError
+          ? err.message
+          : 'Could not create your profile.',
+      )
+    }
   }
 
   const roleLabel = role === 'farmer' ? 'Farmer' : 'Buyer'
@@ -471,7 +549,7 @@ function Login({
             {roleLabel.toLowerCase()}
           </p>
 
-          {!sentOtp ? (
+          {!otpSent ? (
             <>
               <label className="mt-6 block space-y-2">
                 <span className="text-sm font-semibold">
@@ -486,6 +564,23 @@ function Login({
                   className="h-12 w-full rounded-xl border border-input bg-background px-3"
                 />
               </label>
+
+              {role === 'buyer' && (
+                <label className="mt-4 block space-y-2">
+                  <span className="text-sm font-semibold">
+                    Company / business name{' '}
+                    <span className="text-destructive">*</span>
+                  </span>
+
+                  <input
+                    type="text"
+                    value={companyName}
+                    onChange={(e) => setCompanyName(e.target.value)}
+                    placeholder="Enter your company name"
+                    className="h-12 w-full rounded-xl border border-input bg-background px-3"
+                  />
+                </label>
+              )}
 
               <label className="mt-4 block space-y-2">
                 <span className="text-sm font-semibold">
@@ -547,20 +642,19 @@ function Login({
 
               <button
                 type="button"
-                disabled={!isValidPhone || !isValidName}
+                disabled={
+                  !isValidPhone || !isValidName || !isValidCompany || submitting
+                }
                 onClick={sendOtp}
                 className="mt-5 flex min-h-12 w-full items-center justify-center rounded-xl bg-primary font-bold text-primary-foreground disabled:cursor-not-allowed disabled:opacity-50"
               >
-                Send OTP
+                {submitting ? 'Sending…' : 'Send OTP'}
               </button>
             </>
           ) : (
             <>
               <p className="mt-6 text-sm text-muted-foreground">
-                OTP sent to +91 {phone}.{' '}
-                <span className="font-bold text-primary">
-                  (demo OTP: {sentOtp})
-                </span>
+                OTP sent to +91 {phone}.
               </p>
 
               <label className="mt-4 block space-y-2">
@@ -571,14 +665,14 @@ function Login({
                 <input
                   type="text"
                   inputMode="numeric"
-                  maxLength={4}
+                  maxLength={6}
                   value={otp}
                   onChange={(e) =>
                     setOtp(
-                      e.target.value.replace(/\D/g, '').slice(0, 4),
+                      e.target.value.replace(/\D/g, '').slice(0, 6),
                     )
                   }
-                  placeholder="4-digit OTP"
+                  placeholder="Enter the OTP"
                   className="h-12 w-full rounded-xl border border-input bg-background px-3 text-center text-lg tracking-[0.5em]"
                 />
               </label>
@@ -591,17 +685,17 @@ function Login({
 
               <button
                 type="button"
-                disabled={!isValidOtp}
+                disabled={!isValidOtp || submitting}
                 onClick={verifyOtp}
                 className="mt-5 flex min-h-12 w-full items-center justify-center rounded-xl bg-primary font-bold text-primary-foreground disabled:cursor-not-allowed disabled:opacity-50"
               >
-                Verify &amp; Continue
+                {submitting ? 'Verifying…' : 'Verify & Continue'}
               </button>
 
               <button
                 type="button"
                 onClick={() => {
-                  setSentOtp(null)
+                  setOtpSent(false)
                   setOtp('')
                   setError('')
                 }}
