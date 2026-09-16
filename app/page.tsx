@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import {
   BarChart3,
+  ArrowLeft,
   CheckCircle2,
   ChevronRight,
   CircleHelp,
@@ -12,7 +13,6 @@ import {
   Minus,
   Package,
   Phone,
-  ShieldCheck,
   Sprout,
   TrendingUp,
   Truck,
@@ -383,8 +383,12 @@ function DemoSteps({ view }: { view: View }) {
 /* -------------------------------------------------------------------------- */
 
 function Login({
+  role,
+  onBack,
   onVerified,
 }: {
+  role: 'farmer' | 'buyer'
+  onBack: () => void
   onVerified: (phone: string) => void
 }) {
   const [phone, setPhone] = useState('')
@@ -422,6 +426,9 @@ function Login({
     onVerified(phone)
   }
 
+  const roleLabel = role === 'farmer' ? 'Farmer' : 'Buyer'
+  const roleIcon = role === 'farmer' ? '🌾' : '🛒'
+
   return (
     <div className="flex min-h-screen items-center justify-center bg-background p-6">
       <div className="w-full max-w-md space-y-8">
@@ -430,16 +437,26 @@ function Login({
         </div>
 
         <div className="rounded-3xl border border-border bg-card p-7 shadow-sm">
+          <button
+            type="button"
+            onClick={onBack}
+            className="mb-4 flex items-center gap-1 text-sm font-semibold text-muted-foreground"
+          >
+            <ArrowLeft className="size-4" />
+            Change role
+          </button>
+
           <div className="flex items-center justify-center gap-2">
-            <ShieldCheck className="size-5 text-primary" />
+            <span className="text-2xl">{roleIcon}</span>
 
             <h1 className="font-serif text-2xl font-bold">
-              Log in
+              {roleLabel} Login
             </h1>
           </div>
 
           <p className="mt-2 text-center text-sm text-muted-foreground">
-            Enter your mobile number to continue
+            Enter your mobile number to continue as a{' '}
+            {roleLabel.toLowerCase()}
           </p>
 
           {!sentOtp ? (
@@ -2616,17 +2633,25 @@ export default function Page() {
     netReturn,
   }
 
-  if (!phone) {
-    return <Login onVerified={setPhone} />
-  }
-
   if (!role) {
     return (
       <RoleSelect
         selectRole={(selected) => {
           setRole(selected)
+        }}
+      />
+    )
+  }
+
+  if (!phone) {
+    return (
+      <Login
+        role={role}
+        onBack={() => setRole(null)}
+        onVerified={(verifiedPhone) => {
+          setPhone(verifiedPhone)
           setView(
-            selected === 'buyer' ? 'marketplace' : 'dashboard',
+            role === 'buyer' ? 'marketplace' : 'dashboard',
           )
         }}
       />
