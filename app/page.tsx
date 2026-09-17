@@ -73,6 +73,7 @@ import { crops, type Crop } from '@/lib/crops'
 import { supabase } from '@/supabase/client'
 import { api, ApiError } from '@/lib/api-client'
 
+
 type View =
   | 'dashboard'
   | 'comparison'
@@ -397,7 +398,8 @@ function Login({
   const [name, setName] = useState('')
   const [phone, setPhone] = useState('')
   const [companyName, setCompanyName] = useState('')
-  const [idFileName, setIdFileName] = useState('')
+  const [landSizeAcres, setLandSizeAcres] = useState('')
+  const [idFile, setIdFile] = useState<File | null>(null)
   const [otp, setOtp] = useState('')
   const [otpSent, setOtpSent] = useState(false)
   const [submitting, setSubmitting] = useState(false)
@@ -408,6 +410,8 @@ function Login({
   const isValidName = name.trim().length > 0
   const isValidCompany =
     role === 'buyer' ? companyName.trim().length > 0 : true
+  // Digital Farmer ID is compulsory now — a farmer cannot proceed without it.
+  const isValidId = role === 'farmer' ? idFile !== null : true
 
   const e164Phone = `+91${phone}`
 
@@ -422,6 +426,11 @@ function Login({
       return
     }
 
+    if (role === 'farmer' && !isValidId) {
+      setError('Upload your Digital Farmer ID to continue')
+      return
+    }
+
     if (!isValidPhone) {
       setError('Enter a valid 10-digit mobile number')
       return
@@ -430,7 +439,6 @@ function Login({
     setError('')
     setSubmitting(true)
 
-    // Real SMS OTP via Supabase Auth — no more local simulation.
     const { error: otpError } = await supabase.auth.signInWithOtp({
       phone: e164Phone,
     })
@@ -450,21 +458,48 @@ function Login({
     setError('')
     setSubmitting(true)
 
-    const { error: verifyError } = await supabase.auth.verifyOtp({
-      phone: e164Phone,
-      token: otp,
-      type: 'sms',
-    })
+    const { data: verifyData, error: verifyError } =
+      await supabase.auth.verifyOtp({
+        phone: e164Phone,
+        token: otp,
+        type: 'sms',
+      })
 
-    if (verifyError) {
+    if (verifyError || !verifyData.user) {
       setSubmitting(false)
       setError('Incorrect OTP. Try again.')
       return
     }
 
-    // Session now exists. Create the profile row — or, if this phone
-    // already has one (returning user), just fetch it instead.
     try {
+      let farmerIdUrl: string | null = null
+
+      if (role === 'farmer' && idFile) {
+        const path = `${verifyData.user.id}/${Date.now()}-${idFile.name}`
+
+        const { error: uploadError } = await supabase.storage
+          .from('farmer-ids')
+          .upload(path, idFile)
+
+        if (uploadError) {
+          throw new Error('Could not upload your ID. Try again.')
+        }
+
+        // Bucket is private — sign a long-lived URL (10 years) so the
+        // farmer_profiles.farmer_id_url column can store something
+        // durable rather than a short-lived link.
+        const { data: signedUrlData, error: signError } =
+          await supabase.storage
+            .from('farmer-ids')
+            .createSignedUrl(path, 60 * 60 * 24 * 365 * 10)
+
+        if (signError || !signedUrlData) {
+          throw new Error('Could not process your ID upload.')
+        }
+
+        farmerIdUrl = signedUrlData.signedUrl
+      }
+
       const profileInput =
         role === 'farmer'
           ? {
@@ -472,7 +507,10 @@ function Login({
               fullName: name.trim(),
               phone,
               locationId: defaultLocation.id,
-              farmerIdUrl: null,
+              farmerIdUrl,
+              landSizeAcres: landSizeAcres
+                ? Number(landSizeAcres)
+                : null,
             }
           : {
               role: 'buyer' as const,
@@ -505,9 +543,7 @@ function Login({
 
       setSubmitting(false)
       setError(
-        err instanceof ApiError
-          ? err.message
-          : 'Could not create your profile.',
+        err instanceof Error ? err.message : 'Could not create your profile.',
       )
     }
   }
@@ -604,11 +640,37 @@ function Login({
                     className="h-12 w-full rounded-xl border border-input bg-background pl-9 pr-3"
                   />
                 </div>
+
+                <p className="text-xs text-muted-foreground">
+                  Demo login: use 9825545651 with OTP 123456
+                </p>
               </label>
+
+              {role === 'farmer' && (
+                <label className="mt-4 block space-y-2">
+                  <span className="text-sm font-semibold">
+                    Land size (acres)
+                  </span>
+
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.1"
+                    value={landSizeAcres}
+                    onChange={(e) => setLandSizeAcres(e.target.value)}
+                    placeholder="e.g. 2.5"
+                    className="h-12 w-full rounded-xl border border-input bg-background px-3"
+                  />
+                </label>
+              )}
 
               <div className="mt-4 space-y-2">
                 <span className="text-sm font-semibold">
-                  Upload ID (optional)
+                  Upload ID{' '}
+                  {role === 'farmer' && (
+                    <span className="text-destructive">*</span>
+                  )}
+                  {role === 'buyer' && '(optional)'}
                 </span>
 
                 <p className="text-xs text-muted-foreground">
@@ -621,14 +683,15 @@ function Login({
                   </span>
 
                   <span className="truncate text-sm text-muted-foreground">
-                    {idFileName || 'No file chosen'}
+                    {idFile?.name || 'No file chosen'}
                   </span>
 
                   <input
                     type="file"
+                    accept="image/*,application/pdf"
                     className="sr-only"
                     onChange={(e) =>
-                      setIdFileName(e.target.files?.[0]?.name ?? '')
+                      setIdFile(e.target.files?.[0] ?? null)
                     }
                   />
                 </label>
@@ -643,7 +706,11 @@ function Login({
               <button
                 type="button"
                 disabled={
-                  !isValidPhone || !isValidName || !isValidCompany || submitting
+                  !isValidPhone ||
+                  !isValidName ||
+                  !isValidCompany ||
+                  !isValidId ||
+                  submitting
                 }
                 onClick={sendOtp}
                 className="mt-5 flex min-h-12 w-full items-center justify-center rounded-xl bg-primary font-bold text-primary-foreground disabled:cursor-not-allowed disabled:opacity-50"

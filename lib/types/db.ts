@@ -35,6 +35,7 @@ export type FarmerProfile = Profile & {
   role: 'farmer'
   farmerIdUrl: string | null
   farmerIdVerified: boolean
+  landSizeAcres: number | null
 }
 
 export type BuyerProfile = Profile & {

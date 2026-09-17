@@ -70,10 +70,12 @@ export async function POST(request: NextRequest) {
     }
 
     if (body.role === 'farmer') {
-      // Digital Farmer ID is optional — a farmer can finish signup without it
+      // Digital Farmer ID is now compulsory — schema validation already
+      // rejects a missing farmerIdUrl before we get here.
       const { error } = await supabase.from('farmer_profiles').insert({
         profile_id: user.id,
-        farmer_id_url: body.farmerIdUrl ?? null,
+        farmer_id_url: body.farmerIdUrl,
+        land_size_acres: body.landSizeAcres ?? null,
       })
 
       if (error) {
@@ -131,6 +133,13 @@ export async function PATCH(request: NextRequest) {
       await supabase
         .from('farmer_profiles')
         .update({ farmer_id_url: body.farmerIdUrl })
+        .eq('profile_id', profile.id)
+    }
+
+    if (profile.role === 'farmer' && body.landSizeAcres !== undefined) {
+      await supabase
+        .from('farmer_profiles')
+        .update({ land_size_acres: body.landSizeAcres })
         .eq('profile_id', profile.id)
     }
 

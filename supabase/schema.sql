@@ -97,7 +97,6 @@ create table if not exists public.farmer_profiles (
     references public.profiles(id)
     on delete cascade,
 
-  -- OPTIONAL
   farmer_id_url text,
 
   farmer_id_verified boolean not null default false,
@@ -236,28 +235,21 @@ create index if not exists offers_status_idx
 on public.offers(status);
 
 
--- Prevent duplicate active offers
-do $$
-begin
-  if not exists (
-    select 1
-    from pg_constraint
-    where conname = 'one_live_offer_per_listing_per_buyer'
-  ) then
+-- Prevent duplicate active offers (drop+add, safe to rerun anytime)
+alter table public.offers
+drop constraint if exists one_live_offer_per_listing_per_buyer;
 
-    alter table public.offers
-    add constraint one_live_offer_per_listing_per_buyer
-    exclude using gist (
-      listing_id with =,
-      buyer_id with =
-    )
-    where (
-      status in ('pending', 'countered')
-    );
+drop index if exists one_live_offer_per_listing_per_buyer;
 
-  end if;
-end
-$$;
+alter table public.offers
+add constraint one_live_offer_per_listing_per_buyer
+exclude using gist (
+  listing_id with =,
+  buyer_id with =
+)
+where (
+  status in ('pending', 'countered')
+);
 
 
 -- ============================================================================
@@ -731,5 +723,221 @@ using (
 
 
 -- ============================================================================
--- DONE
+-- DONE (schema.sql)
 -- ============================================================================
+
+
+-- ============================================================================
+-- KrishiSetu — Schema Additions (Phase 2 features)
+-- Run this AFTER supabase/schema.sql, in the same SQL editor.
+-- ============================================================================
+
+-- ============================================================================
+-- 1. MINIMUM SELLING PRICE (MSP)
+-- ============================================================================
+
+create table if not exists public.crop_msp (
+  id uuid primary key default uuid_generate_v4(),
+
+  crop_name text not null,
+  season text not null,
+  msp_per_quintal numeric(10,2) not null check (msp_per_quintal > 0),
+
+  effective_from date not null default current_date,
+
+  created_at timestamptz not null default now(),
+
+  unique (crop_name, season)
+);
+
+alter table public.listings
+  add column if not exists msp_per_quintal numeric(10,2);
+
+
+-- ============================================================================
+-- 2. COMPULSORY FARMER IDENTIFICATION
+-- ============================================================================
+
+alter table public.farmer_profiles
+  alter column farmer_id_url drop not null;
+
+do $$
+begin
+  if not exists (
+    select 1 from pg_constraint
+    where conname = 'farmer_id_required_on_new_rows'
+  ) then
+    alter table public.farmer_profiles
+    add constraint farmer_id_required_on_new_rows
+    check (farmer_id_url is not null);
+  end if;
+end
+$$;
+
+
+-- Storage bucket for farmer ID uploads
+insert into storage.buckets (id, name, public)
+values ('farmer-ids', 'farmer-ids', false)
+on conflict (id) do nothing;
+
+do $$
+begin
+  if not exists (
+    select 1 from pg_policies
+    where tablename = 'objects' and policyname = 'farmer_ids_owner_insert'
+  ) then
+    create policy farmer_ids_owner_insert
+    on storage.objects for insert
+    with check (
+      bucket_id = 'farmer-ids'
+      and (storage.foldername(name))[1] = auth.uid()::text
+    );
+  end if;
+
+  if not exists (
+    select 1 from pg_policies
+    where tablename = 'objects' and policyname = 'farmer_ids_owner_select'
+  ) then
+    create policy farmer_ids_owner_select
+    on storage.objects for select
+    using (
+      bucket_id = 'farmer-ids'
+      and (storage.foldername(name))[1] = auth.uid()::text
+    );
+  end if;
+end
+$$;
+
+
+-- ============================================================================
+-- 3. FARMER DETAILS: land size + crop history
+-- ============================================================================
+
+alter table public.farmer_profiles
+  add column if not exists land_size_acres numeric(6,2)
+    check (land_size_acres is null or land_size_acres > 0);
+
+create table if not exists public.farmer_crop_history (
+  id uuid primary key default uuid_generate_v4(),
+
+  farmer_id uuid not null
+    references public.profiles(id)
+    on delete cascade,
+
+  crop_name text not null,
+  season text not null,
+  quantity_quintals numeric(10,2)
+    check (quantity_quintals is null or quantity_quintals > 0),
+
+  created_at timestamptz not null default now()
+);
+
+create index if not exists farmer_crop_history_farmer_idx
+on public.farmer_crop_history(farmer_id);
+
+
+-- ============================================================================
+-- 5 & 7. CROP ROTATION / DISEASE + IRRIGATION / PESTICIDE GUIDANCE
+-- ============================================================================
+
+create table if not exists public.crop_care_guidelines (
+  id uuid primary key default uuid_generate_v4(),
+
+  crop_name text not null unique,
+
+  recommended_rotation_crops text[] not null default '{}',
+  disease_risk_notes text,
+
+  irrigation_advice text,
+  pesticide_advice text,
+
+  created_at timestamptz not null default now()
+);
+
+
+-- ============================================================================
+-- 9. LEGAL AGREEMENT BETWEEN BUYER AND FARMER
+-- ============================================================================
+
+create table if not exists public.agreements (
+  id uuid primary key default uuid_generate_v4(),
+
+  offer_id uuid not null unique
+    references public.offers(id)
+    on delete cascade,
+
+  farmer_id uuid not null
+    references public.profiles(id)
+    on delete cascade,
+
+  buyer_id uuid not null
+    references public.profiles(id)
+    on delete cascade,
+
+  terms_version text not null default 'v1',
+
+  farmer_accepted_at timestamptz,
+  buyer_accepted_at timestamptz,
+
+  contract_pdf_url text,
+
+  created_at timestamptz not null default now()
+);
+
+create index if not exists agreements_farmer_idx
+on public.agreements(farmer_id);
+
+create index if not exists agreements_buyer_idx
+on public.agreements(buyer_id);
+
+
+-- ============================================================================
+-- RLS — new tables
+-- ============================================================================
+
+alter table public.crop_msp enable row level security;
+alter table public.crop_care_guidelines enable row level security;
+alter table public.farmer_crop_history enable row level security;
+alter table public.agreements enable row level security;
+
+do $$
+begin
+  if not exists (
+    select 1 from pg_policies
+    where tablename = 'crop_msp' and policyname = 'crop_msp_public_read'
+  ) then
+    create policy crop_msp_public_read
+    on public.crop_msp for select
+    using (true);
+  end if;
+
+  if not exists (
+    select 1 from pg_policies
+    where tablename = 'crop_care_guidelines' and policyname = 'crop_care_public_read'
+  ) then
+    create policy crop_care_public_read
+    on public.crop_care_guidelines for select
+    using (true);
+  end if;
+
+  if not exists (
+    select 1 from pg_policies
+    where tablename = 'farmer_crop_history' and policyname = 'crop_history_owner_rw'
+  ) then
+    create policy crop_history_owner_rw
+    on public.farmer_crop_history for all
+    using (auth.uid() = farmer_id)
+    with check (auth.uid() = farmer_id);
+  end if;
+
+  if not exists (
+    select 1 from pg_policies
+    where tablename = 'agreements' and policyname = 'agreements_parties_rw'
+  ) then
+    create policy agreements_parties_rw
+    on public.agreements for all
+    using (auth.uid() = farmer_id or auth.uid() = buyer_id)
+    with check (auth.uid() = farmer_id or auth.uid() = buyer_id);
+  end if;
+end
+$$;

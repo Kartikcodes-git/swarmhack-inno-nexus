@@ -114,7 +114,7 @@ export async function requireProfile(): Promise<AnyProfile> {
   if (base.role === 'farmer') {
     const { data: farmer } = await supabase
       .from('farmer_profiles')
-      .select('farmer_id_url, farmer_id_verified')
+      .select('farmer_id_url, farmer_id_verified, land_size_acres')
       .eq('profile_id', user.id)
       .maybeSingle()
 
@@ -123,6 +123,7 @@ export async function requireProfile(): Promise<AnyProfile> {
       role: 'farmer',
       farmerIdUrl: farmer?.farmer_id_url ?? null,
       farmerIdVerified: farmer?.farmer_id_verified ?? false,
+      landSizeAcres: farmer?.land_size_acres ?? null,
     }
   }
 

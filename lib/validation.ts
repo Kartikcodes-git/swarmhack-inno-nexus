@@ -34,7 +34,9 @@ export const createFarmerProfileSchema = z.object({
   fullName: z.string().trim().min(2).max(80),
   phone,
   locationId: z.string().trim().min(1).max(60),
-  farmerIdUrl: z.string().url().max(500).optional().nullable(),
+  // Compulsory now — a farmer cannot sign up without an ID document.
+  farmerIdUrl: z.string().url().max(500),
+  landSizeAcres: z.number().positive().max(100000).optional().nullable(),
 })
 
 export const createBuyerProfileSchema = z.object({
@@ -66,6 +68,7 @@ export const updateProfileSchema = z.object({
   phone: phone.optional(),
   locationId: z.string().trim().min(1).max(60).optional(),
   farmerIdUrl: z.string().url().max(500).nullable().optional(),
+  landSizeAcres: z.number().positive().max(100000).nullable().optional(),
   companyName: z.string().trim().min(2).max(120).optional(),
   businessType: z.string().trim().max(80).nullable().optional(),
   gstin: z.string().trim().max(20).nullable().optional(),
