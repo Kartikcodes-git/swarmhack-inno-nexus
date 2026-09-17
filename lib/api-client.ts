@@ -8,6 +8,10 @@ import type {
   Rating,
   RatingSummary,
   AnyProfile,
+  CropMsp,
+  CropCareGuideline,
+  CropRecommendation,
+  FarmerCropHistoryEntry,
 } from '@/lib/types/db'
 
 /**
@@ -200,5 +204,34 @@ export const api = {
       call<{ records: unknown[] }>(
         `/api/mandi-prices${toQuery({ commodity, state })}`,
       ),
+  },
+
+  // -- bucket A -----------------------------------------------------------
+
+  msp: {
+    list: (crop?: string) => call<CropMsp[]>(`/api/msp${toQuery({ crop })}`),
+  },
+
+  cropCare: {
+    list: (crop?: string) =>
+      call<CropCareGuideline[]>(`/api/crop-care${toQuery({ crop })}`),
+  },
+
+  cropHistory: {
+    mine: () => call<FarmerCropHistoryEntry[]>('/api/crop-history'),
+
+    add: (input: {
+      cropName: string
+      season: string
+      quantityQuintals?: number
+    }) =>
+      call<FarmerCropHistoryEntry>('/api/crop-history', {
+        method: 'POST',
+        body: JSON.stringify(input),
+      }),
+  },
+
+  recommendations: {
+    mine: () => call<CropRecommendation[]>('/api/recommendations'),
   },
 }

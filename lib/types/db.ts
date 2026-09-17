@@ -111,3 +111,46 @@ export type ListingFilters = {
 export type ApiResult<T> =
   | { ok: true; data: T }
   | { ok: false; error: string; fieldErrors?: Record<string, string> }
+
+// ---------------------------------------------------------------------------
+// Bucket A — MSP, farmer crop history, rotation/disease + irrigation advice
+// ---------------------------------------------------------------------------
+
+export type CropMsp = {
+  id: string
+  cropName: string
+  season: string
+  mspPerQuintal: number
+  effectiveFrom: string
+}
+
+export type FarmerCropHistoryEntry = {
+  id: string
+  farmerId: string
+  cropName: string
+  season: string
+  quantityQuintals: number | null
+  createdAt: string
+}
+
+export type CropCareGuideline = {
+  cropName: string
+  recommendedRotationCrops: string[]
+  diseaseRiskNotes: string | null
+  irrigationAdvice: string | null
+  pesticideAdvice: string | null
+}
+
+export type RecommendationKind =
+  | 'msp'
+  | 'rotation'
+  | 'irrigation'
+  | 'pesticide'
+
+export type CropRecommendation = {
+  cropName: string
+  kind: RecommendationKind
+  message: string
+  /** higher = show first */
+  priority: number
+}

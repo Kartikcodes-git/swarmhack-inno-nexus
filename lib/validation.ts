@@ -144,6 +144,16 @@ export const createRatingSchema = z.object({
 })
 
 // ---------------------------------------------------------------------------
+// Farmer crop history (bucket A #2)
+// ---------------------------------------------------------------------------
+
+export const createCropHistorySchema = z.object({
+  cropName: z.string().trim().min(2).max(60),
+  season: z.string().trim().min(2).max(30),
+  quantityQuintals: z.coerce.number().positive().max(100000).optional().nullable(),
+})
+
+// ---------------------------------------------------------------------------
 // Response helpers
 // ---------------------------------------------------------------------------
 
