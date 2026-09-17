@@ -209,10 +209,17 @@ export const labels = {
     marketplace: 'Marketplace',
     buyerMarketplaceTag: 'Buyer marketplace',
     buyerMarketplace: 'Buyer Marketplace',
-    findBuyers: 'Find sellers',
+    // Buyer is looking for FARMER produce here — not other buyers.
+    findBuyers: 'Find farmers',
     findBuyersSubtitle:
-      'Connect your produce with buyers offering competitive prices.',
+      'Browse produce from farmers offering competitive prices.',
     findMoreBuyers: 'Find more buyers',
+    // Same screen, opened by a farmer via "Find more buyers" instead —
+    // copy reframed so it doesn't read like they're shopping for produce.
+    farmerViewingMarketTag: 'Buyer network',
+    farmerViewingMarketTitle: 'Buyer demand in your area',
+    farmerViewingMarketSubtitle:
+      'See what similar produce is selling for, and connect with buyers nearby.',
     myOffers: 'My Offers',
     farmerOffers: 'Farmer Offers',
     buyerOffers: 'Buyer Offers',
@@ -712,10 +719,14 @@ export const labels = {
     marketplace: 'बाजारपेठ',
     buyerMarketplaceTag: 'खरेदीदार बाजारपेठ',
     buyerMarketplace: 'खरेदीदार बाजारपेठ',
-    findBuyers: 'खरेदीदार शोधा',
+    findBuyers: 'शेतकरी शोधा',
     findBuyersSubtitle:
-      'स्पर्धात्मक किंमत देणाऱ्या खरेदीदारांशी तुमचा माल जोडा.',
+      'स्पर्धात्मक किमतीत उत्पादन देणाऱ्या शेतकऱ्यांचा शोध घ्या.',
     findMoreBuyers: 'अधिक खरेदीदार शोधा',
+    farmerViewingMarketTag: 'खरेदीदार नेटवर्क',
+    farmerViewingMarketTitle: 'तुमच्या भागातील खरेदीदारांची मागणी',
+    farmerViewingMarketSubtitle:
+      'समान उत्पादन कोणत्या दराने विकले जात आहे ते पहा आणि जवळच्या खरेदीदारांशी संपर्क साधा.',
     myOffers: 'माझ्या ऑफर',
     farmerOffers: 'शेतकऱ्यांच्या ऑफर',
     buyerOffers: 'खरेदीदार ऑफर',
@@ -1185,10 +1196,14 @@ export const labels = {
     marketplace: 'बाज़ार',
     buyerMarketplaceTag: 'खरीदार बाज़ार',
     buyerMarketplace: 'खरीदार बाज़ार',
-    findBuyers: 'खरीदार खोजें',
+    findBuyers: 'किसान खोजें',
     findBuyersSubtitle:
-      'अपनी उपज को प्रतिस्पर्धी कीमत देने वाले खरीदारों से जोड़ें।',
+      'प्रतिस्पर्धी कीमत देने वाले किसानों की उपज देखें।',
     findMoreBuyers: 'और खरीदार खोजें',
+    farmerViewingMarketTag: 'खरीदार नेटवर्क',
+    farmerViewingMarketTitle: 'आपके क्षेत्र में खरीदारों की मांग',
+    farmerViewingMarketSubtitle:
+      'देखें कि इसी तरह की उपज किस दाम पर बिक रही है, और नज़दीकी खरीदारों से जुड़ें।',
     myOffers: 'मेरी ऑफ़र',
     farmerOffers: 'किसान की ऑफ़र',
     buyerOffers: 'खरीदार ऑफ़र',

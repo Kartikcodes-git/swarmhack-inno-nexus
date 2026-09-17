@@ -3161,6 +3161,7 @@ export default function Page() {
               setOffers={setOffers}
               goToGrading={goToGrading}
               goToLogistics={() => setView('logistics')}
+              viewerRole={role}
             />
           )}
 

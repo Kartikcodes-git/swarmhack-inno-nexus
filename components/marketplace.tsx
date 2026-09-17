@@ -442,6 +442,7 @@ export function BuyerMarketplace({
   setOffers,
   goToGrading,
   goToLogistics,
+  viewerRole = 'buyer',
 }: {
   offers: Offer[]
   context: {
@@ -455,8 +456,14 @@ export function BuyerMarketplace({
   setOffers: React.Dispatch<React.SetStateAction<Offer[]>>
   goToGrading: (offerId: string) => void
   goToLogistics: () => void
+  // Same screen, same listing data — only the copy changes depending on
+  // who opened it. A farmer lands here via "Find more buyers" (from their
+  // own Buyer Offers screen); a buyer lands here from the main nav.
+  viewerRole?: 'farmer' | 'buyer'
 }) {
   const { t } = useLanguage()
+
+  const isFarmerViewing = viewerRole === 'farmer'
 
   const [cropFilter, setCropFilter] = useState('All crops')
   const [locationFilter, setLocationFilter] = useState('All locations')
@@ -482,15 +489,17 @@ export function BuyerMarketplace({
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <p className="text-sm font-semibold text-primary">
-            {t.buyerMarketplaceTag}
+            {isFarmerViewing ? t.farmerViewingMarketTag : t.buyerMarketplaceTag}
           </p>
 
           <h1 className="mt-2 font-serif text-3xl font-bold md:text-4xl">
-            {t.findBuyers}
+            {isFarmerViewing ? t.farmerViewingMarketTitle : t.findBuyers}
           </h1>
 
           <p className="mt-2 text-muted-foreground">
-            {t.findBuyersSubtitle}
+            {isFarmerViewing
+              ? t.farmerViewingMarketSubtitle
+              : t.findBuyersSubtitle}
           </p>
         </div>
 
