@@ -209,7 +209,7 @@ export const labels = {
     marketplace: 'Marketplace',
     buyerMarketplaceTag: 'Buyer marketplace',
     buyerMarketplace: 'Buyer Marketplace',
-    findBuyers: 'Find buyers',
+    findBuyers: 'Find sellers',
     findBuyersSubtitle:
       'Connect your produce with buyers offering competitive prices.',
     findMoreBuyers: 'Find more buyers',
