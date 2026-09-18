@@ -5,6 +5,7 @@ import { Check, MapPin, Phone, X } from 'lucide-react'
 import { useLanguage } from '@/lib/language'
 import { crops } from '@/lib/crops'
 import { locations } from '@/lib/locations'
+import { MspBadge } from '@/components/msp-badge'
 
 export type MarketplaceView = 'marketplace' | 'offers'
 
@@ -330,7 +331,14 @@ function ListingCard({
           </p>
         </div>
 
-        <Badge tone="green">{listing.quality}</Badge>
+        <div className="flex flex-col items-end gap-1.5">
+          <Badge tone="green">{listing.quality}</Badge>
+          <MspBadge
+            cropName={listing.crop}
+            season=""
+            pricePerQuintal={listing.price}
+          />
+        </div>
       </div>
 
       <div className="mt-5 grid grid-cols-2 gap-4 border-y border-border py-4 text-sm">
