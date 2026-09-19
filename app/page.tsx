@@ -69,6 +69,7 @@ import { Logistics } from '@/components/logistics'
 import { Phase4QuickAccess } from '@/components/phase4'
 import { RecommendationsFeed } from '@/components/recommendations-feed'
 import { CropHistoryForm } from '@/components/crop-history-form'
+import { WeatherWidget } from '@/components/weather-widget'
 
 import { crops, type Crop } from '@/lib/crops'
 
@@ -3017,6 +3018,7 @@ export default function Page() {
 
           {view === 'dashboard' && role === 'farmer' && (
             <div className="space-y-5">
+              <WeatherWidget locationId={locationId} />
               <RecommendationsFeed />
               <CropHistoryForm />
             </div>

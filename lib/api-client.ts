@@ -13,6 +13,7 @@ import type {
   CropRecommendation,
   FarmerCropHistoryEntry,
 } from '@/lib/types/db'
+import type { WeatherSnapshot } from '@/lib/weather'
 
 /**
  * The ONLY place the frontend talks to the backend.
@@ -233,5 +234,10 @@ export const api = {
 
   recommendations: {
     mine: () => call<CropRecommendation[]>('/api/recommendations'),
+  },
+
+  weather: {
+    forecast: (locationId: string) =>
+      call<WeatherSnapshot>(`/api/weather${toQuery({ locationId })}`),
   },
 }
