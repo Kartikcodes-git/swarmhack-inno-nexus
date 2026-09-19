@@ -10,7 +10,7 @@ import type { CapacitorConfig } from '@capacitor/cli'
 // Replace this with your deployed URL (Vercel, etc.) before building.
 // For local testing on a phone on the same Wi-Fi, use your machine's
 // LAN IP instead of localhost, e.g. "http://192.168.1.20:3000".
-const DEPLOYED_URL = 'https://your-krishisetu-deployment.vercel.app'
+const DEPLOYED_URL = 'https://mykrishisetu.vercel.app/'
 
 const config: CapacitorConfig = {
   appId: 'in.krishisetu.app',
