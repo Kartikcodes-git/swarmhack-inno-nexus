@@ -25,7 +25,11 @@ const KIND_STYLE: Record<
  * Drop into the farmer dashboard:
  *   <RecommendationsFeed />
  */
-export function RecommendationsFeed() {
+export function RecommendationsFeed({
+  excludeKinds = [],
+}: {
+  excludeKinds?: RecommendationKind[]
+} = {}) {
   const [items, setItems] = useState<CropRecommendation[] | null>(null)
 
   useEffect(() => {
@@ -53,10 +57,14 @@ export function RecommendationsFeed() {
     )
   }
 
-  if (items.length === 0) {
+  const visibleItems = items.filter(
+    (item) => !excludeKinds.includes(item.kind),
+  )
+
+  if (visibleItems.length === 0) {
     return (
       <div className="rounded-2xl border border-border bg-card p-5 text-sm text-muted-foreground">
-        Log a crop in your crop history to get MSP, rotation and irrigation
+        Log a crop in your crop history to get rotation and irrigation
         recommendations here.
       </div>
     )
@@ -64,7 +72,7 @@ export function RecommendationsFeed() {
 
   return (
     <div className="space-y-3">
-      {items.map((item, i) => {
+      {visibleItems.map((item, i) => {
         const style = KIND_STYLE[item.kind]
 
         return (

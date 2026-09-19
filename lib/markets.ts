@@ -1,3 +1,5 @@
+import { pickDistrictModalPrice, type LiveMandiRecord } from './live-prices'
+
 export type MarketDemand = 'HIGH' | 'MEDIUM' | 'LOW'
 
 export type PriceTrend =
@@ -193,4 +195,36 @@ export function getMarketById(
   return markets.find(
     (market) => market.id === marketId,
   )
+}
+
+/**
+ * Overrides each market's price for `cropName` with the live Agmarknet
+ * modal price for its district, when one exists today. Markets whose
+ * district has no live record for this crop keep the sample price from
+ * the `markets` array above (prototype fallback) — liveMarketIds tells
+ * the UI which is which, so it can label "Live" vs "Estimated".
+ */
+export function mergeLivePrices(
+  marketsList: Market[],
+  cropName: string,
+  liveRecords: LiveMandiRecord[],
+): { markets: Market[]; liveMarketIds: Set<string> } {
+  const liveMarketIds = new Set<string>()
+
+  const merged = marketsList.map((market) => {
+    const livePrice = pickDistrictModalPrice(liveRecords, market.district)
+
+    if (livePrice === null) {
+      return market
+    }
+
+    liveMarketIds.add(market.id)
+
+    return {
+      ...market,
+      prices: { ...market.prices, [cropName]: livePrice },
+    }
+  })
+
+  return { markets: merged, liveMarketIds }
 }

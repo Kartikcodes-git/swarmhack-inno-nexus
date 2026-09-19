@@ -14,6 +14,10 @@ const SEASONS = ['Kharif', 'Rabi', 'Zaid'] as const
  * profiles). This component is the missing piece: per-season crop history,
  * which the recommendation engine (#3–#5) reads.
  *
+ * Crop is free text with a datalist of known crops for convenience — a
+ * farmer growing something not in our list can still log it, they're not
+ * locked to the dropdown.
+ *
  * Drop into the farmer profile / dashboard screen:
  *   <CropHistoryForm />
  */
@@ -24,6 +28,7 @@ export function CropHistoryForm() {
   const [season, setSeason] = useState<(typeof SEASONS)[number]>('Kharif')
   const [quantity, setQuantity] = useState('')
   const [submitting, setSubmitting] = useState(false)
+  const [deletingId, setDeletingId] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
 
   function load() {
@@ -37,14 +42,28 @@ export function CropHistoryForm() {
 
   useEffect(load, [])
 
+  // Datalist = known crop list + whatever this farmer has already typed in
+  // themselves, so a custom crop they logged once shows up as a suggestion
+  // next time instead of only the fixed 13.
+  const knownCropNames = [
+    ...crops.map((c) => c.name),
+    ...new Set(history.map((h) => h.cropName)),
+  ].filter((name, i, arr) => arr.indexOf(name) === i)
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     setError(null)
+
+    if (!cropName.trim()) {
+      setError('Enter a crop name.')
+      return
+    }
+
     setSubmitting(true)
 
     try {
       await api.cropHistory.add({
-        cropName,
+        cropName: cropName.trim(),
         season,
         quantityQuintals: quantity ? Number(quantity) : undefined,
       })
@@ -54,6 +73,20 @@ export function CropHistoryForm() {
       setError(err instanceof ApiError ? err.message : 'Could not save.')
     } finally {
       setSubmitting(false)
+    }
+  }
+
+  async function handleDelete(id: string) {
+    setError(null)
+    setDeletingId(id)
+
+    try {
+      await api.cropHistory.remove(id)
+      setHistory((prev) => prev.filter((entry) => entry.id !== id))
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Could not delete.')
+    } finally {
+      setDeletingId(null)
     }
   }
 
@@ -69,17 +102,19 @@ export function CropHistoryForm() {
         onSubmit={handleSubmit}
         className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4"
       >
-        <select
+        <input
+          list="crop-history-known-crops"
+          type="text"
+          placeholder="Crop name"
           value={cropName}
           onChange={(e) => setCropName(e.target.value)}
           className="min-h-11 rounded-xl border border-border px-3 text-sm"
-        >
-          {crops.map((crop) => (
-            <option key={crop.name} value={crop.name}>
-              {crop.icon} {crop.name}
-            </option>
+        />
+        <datalist id="crop-history-known-crops">
+          {knownCropNames.map((name) => (
+            <option key={name} value={name} />
           ))}
-        </select>
+        </datalist>
 
         <select
           value={season}
@@ -133,11 +168,23 @@ export function CropHistoryForm() {
             <span className="font-semibold">
               {entry.cropName} · {entry.season}
             </span>
-            {entry.quantityQuintals !== null && (
-              <span className="text-muted-foreground">
-                {entry.quantityQuintals} quintals
-              </span>
-            )}
+
+            <div className="flex items-center gap-3">
+              {entry.quantityQuintals !== null && (
+                <span className="text-muted-foreground">
+                  {entry.quantityQuintals} quintals
+                </span>
+              )}
+
+              <button
+                type="button"
+                onClick={() => handleDelete(entry.id)}
+                disabled={deletingId === entry.id}
+                className="rounded-lg px-2 py-1 text-xs font-bold text-red-600 hover:bg-red-50 disabled:opacity-60"
+              >
+                {deletingId === entry.id ? 'Deleting…' : 'Delete'}
+              </button>
+            </div>
           </li>
         ))}
       </ul>

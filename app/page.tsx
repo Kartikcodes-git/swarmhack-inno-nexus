@@ -7,7 +7,10 @@ import {
   CheckCircle2,
   ChevronRight,
   CircleHelp,
+  CloudSun,
+  Coins,
   Home,
+  LogOut,
   MapPin,
   Menu,
   Minus,
@@ -36,7 +39,7 @@ import {
 } from '@/lib/spoilage'
 
 import type { Market } from '@/lib/markets'
-import { getMarketsForLocation } from '@/lib/markets'
+import { getMarketsForLocation, mergeLivePrices } from '@/lib/markets'
 import {
   getMarketRecommendations,
   type MarketRecommendation,
@@ -51,6 +54,7 @@ import {
 import {
   fetchLivePrices,
   pickDistrictModalPrice,
+  type LiveMandiRecord,
 } from '@/lib/live-prices'
 
 import { useLanguage, type Labels, type Language } from '@/lib/language'
@@ -67,9 +71,9 @@ import {
 
 import { Logistics } from '@/components/logistics'
 import { Phase4QuickAccess } from '@/components/phase4'
-import { RecommendationsFeed } from '@/components/recommendations-feed'
-import { CropHistoryForm } from '@/components/crop-history-form'
-import { WeatherWidget } from '@/components/weather-widget'
+import { CropLogPage } from '@/components/crop-log-page'
+import { WeatherPage } from '@/components/weather-page'
+import { MspPage } from '@/components/msp-page'
 
 import { crops, type Crop } from '@/lib/crops'
 
@@ -88,6 +92,9 @@ type View =
   | 'transport-confirmed'
   | 'grading'
   | 'contact'
+  | 'weather'
+  | 'msp'
+  | 'crop-log'
   | MarketplaceView
 
 const money = (value: number) =>
@@ -198,6 +205,9 @@ function Sidebar({
     [t.dashboard, 'dashboard', Home],
     [t.markets, 'comparison', BarChart3],
     [t.recommendation, 'recommendation', TrendingUp],
+    ['Crop Log', 'crop-log', Sprout],
+    ['Weather', 'weather', CloudSun],
+    ['MSP', 'msp', Coins],
     [t.logisticsTag, 'logistics', Truck],
     [t.trends, 'trends', TrendingUp],
     [t.offers, 'offers', Package],
@@ -260,6 +270,7 @@ function Header({
   locationLabel,
   t,
   role,
+  onLogout,
 }: {
   onDemo: () => void
   onMenu: () => void
@@ -270,6 +281,7 @@ function Header({
   locationLabel: string
   t: Labels
   role: 'farmer' | 'buyer'
+  onLogout: () => void
 }) {
   return (
     <header className="flex min-h-[76px] items-center justify-between gap-3 border-b border-border bg-background/95 px-4 py-4 backdrop-blur md:px-8">
@@ -327,6 +339,14 @@ function Header({
           )}
         </div>
 
+        <button
+          type="button"
+          onClick={onLogout}
+          className="flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-xs font-bold text-muted-foreground hover:border-red-300 hover:text-red-700"
+        >
+          <LogOut className="size-3.5" />
+          <span className="hidden sm:inline">Logout</span>
+        </button>
 
       </div>
     </header>
@@ -879,8 +899,10 @@ function Dashboard({
   compare,
   openLogistics,
   topRecommendation,
+  isTopPriceLive,
   farmerName,
   setFarmerName,
+  role,
   t,
 }: {
   crop: Crop
@@ -894,11 +916,47 @@ function Dashboard({
   compare: () => void
   openLogistics: () => void
   topRecommendation: MarketRecommendation | null
+  isTopPriceLive: boolean
   farmerName: string
   setFarmerName: (name: string) => void
+  role: 'farmer' | 'buyer'
   t: Labels
 }) {
   const [certificateFileName, setCertificateFileName] = useState('')
+
+  const [ownCropNames, setOwnCropNames] = useState<string[]>([])
+
+  // Farmer's own logged crop names, merged into the crop autocomplete —
+  // same pattern as CropHistoryForm's datalist. Skipped for buyers, who
+  // have no crop history to fetch.
+  useEffect(() => {
+    if (role !== 'farmer') {
+      setOwnCropNames([])
+      return
+    }
+
+    let cancelled = false
+
+    api.cropHistory
+      .mine()
+      .then((entries) => {
+        if (!cancelled) {
+          setOwnCropNames([...new Set(entries.map((e) => e.cropName))])
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setOwnCropNames([])
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [role])
+
+  const dashboardKnownCropNames = [
+    ...crops.map((c) => c.name),
+    ...ownCropNames,
+  ].filter((name, i, arr) => arr.indexOf(name) === i)
 
   return (
     <div className="space-y-8">
@@ -985,28 +1043,33 @@ function Dashboard({
               {t.crop}
             </span>
 
-            <select
+            <input
+              list="dashboard-known-crops"
+              type="text"
               value={crop.name}
               onChange={(event) => {
-                const selected =
-                  crops.find(
-                    (item) => item.name === event.target.value,
-                  ) ?? crops[0]
+                const typed = event.target.value
+                const matched = crops.find(
+                  (item) =>
+                    item.name.toLowerCase() === typed.toLowerCase(),
+                )
 
-                setCrop(selected)
+                setCrop(
+                  matched ?? {
+                    name: typed,
+                    icon: '🌱',
+                    category: 'Vegetable',
+                  },
+                )
               }}
-              className="h-12 w-full rounded-xl border border-primary-foreground/20 bg-primary-foreground/10 px-3 font-semibold outline-none"
-            >
-              {crops.map((item) => (
-                <option
-                  key={item.name}
-                  value={item.name}
-                  className="text-foreground"
-                >
-                  {item.icon} {item.name}
-                </option>
+              placeholder="Type any crop"
+              className="h-12 w-full rounded-xl border border-primary-foreground/20 bg-primary-foreground/10 px-3 font-semibold text-primary-foreground outline-none placeholder:text-primary-foreground/50"
+            />
+            <datalist id="dashboard-known-crops">
+              {dashboardKnownCropNames.map((name) => (
+                <option key={name} value={name} />
               ))}
-            </select>
+            </datalist>
           </label>
 
           <label className="space-y-2">
@@ -1138,7 +1201,13 @@ function Dashboard({
               ? `${money(topRecommendation.revenue.pricePerQuintal)}/q`
               : '—'
           }
-          note="Best available market price"
+          note={
+            topRecommendation
+              ? isTopPriceLive
+                ? '🟢 Live Agmarknet price'
+                : '⏳ Estimated — no live record for this district today'
+              : 'Best available market price'
+          }
         />
 
         <Stat
@@ -1268,6 +1337,7 @@ function Comparison({
   recommend,
   back,
   offline,
+  liveMarketIds,
 }: {
   crop: Crop
   quantity: number
@@ -1275,12 +1345,14 @@ function Comparison({
   recommend: (recommendation: MarketRecommendation) => void
   back: () => void
   offline: boolean
+  liveMarketIds: Set<string>
 }) {
   if (quantity <= 0) {
     return <EmptyState back={back} />
   }
 
   const topRecommendation = recommendations[0] ?? null
+  const anyLive = recommendations.some((r) => liveMarketIds.has(r.market.id))
 
   return (
     <div className="space-y-7">
@@ -1317,6 +1389,7 @@ function Comparison({
             recommendation={recommendation}
             recommend={recommend}
             best={index === 0}
+            isLive={liveMarketIds.has(recommendation.market.id)}
           />
         ))}
       </div>
@@ -1330,8 +1403,9 @@ function Comparison({
       )}
 
       <p className="text-xs text-muted-foreground">
-        Sample / Historical Data · All values are estimates for
-        prototype demonstration.
+        {anyLive
+          ? 'Prices marked "Live" come from official Agmarknet mandi data for today. Markets marked "Estimated" have no live record for this crop/district yet and show a sample price.'
+          : 'No live Agmarknet mandi record for this crop today — all prices below are sample/estimated values for prototype demonstration.'}
       </p>
     </div>
   )
@@ -1464,10 +1538,12 @@ function MarketCard({
   recommendation,
   recommend,
   best,
+  isLive,
 }: {
   recommendation: MarketRecommendation
   recommend: (recommendation: MarketRecommendation) => void
   best: boolean
+  isLive?: boolean
 }) {
   const { market, revenue, label } = recommendation
 
@@ -1495,8 +1571,23 @@ function MarketCard({
             {market.distanceKm} km away
           </p>
 
-          <div className="mt-2">
+          <div className="mt-2 flex flex-wrap items-center gap-2">
             <RecommendationBadge label={label} />
+
+            <span
+              className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ${
+                isLive
+                  ? 'bg-emerald-100 text-emerald-800'
+                  : 'bg-amber-100 text-amber-900'
+              }`}
+              title={
+                isLive
+                  ? 'Live Agmarknet mandi price for this district'
+                  : 'No live Agmarknet record for this district today — sample price shown'
+              }
+            >
+              {isLive ? '🟢 Live price' : '⏳ Estimated'}
+            </span>
           </div>
         </div>
 
@@ -2767,20 +2858,89 @@ export default function Page() {
 
   const { language, setLanguage, t } = useLanguage()
 
+  // Restore session in the background: the Supabase auth cookie already
+  // persists across refreshes (supabase/client.ts uses createBrowserClient,
+  // which writes to cookies, not just localStorage). This does NOT block
+  // the login/RoleSelect screen from rendering — it renders immediately as
+  // before, and if a valid session turns up a moment later, we swap state
+  // and the app moves past it on its own. /api/profile reads the cookie
+  // server-side; if it fails (401 = never signed in, 403 = signed in but no
+  // profile row yet), we just do nothing and the normal login flow stands.
+  useEffect(() => {
+    let cancelled = false
+
+    api.profile
+      .me()
+      .then((profile) => {
+        if (cancelled) return
+
+        setRole(profile.role)
+        setPhone(profile.phone)
+        setLocationId(profile.locationId ?? defaultLocation.id)
+
+        if (profile.role === 'farmer') {
+          setFarmerName(profile.fullName)
+        }
+
+        setView(profile.role === 'buyer' ? 'marketplace' : 'dashboard')
+      })
+      .catch(() => {
+        // not signed in, or signup incomplete — login screen stays as-is
+      })
+
+    return () => {
+      cancelled = true
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
   const quantityInQuintals =
     unit === 'kg'
       ? quantity / 100
       : quantity
 
-  const recommendations = useMemo(() => {
-    const localMarkets = getMarketsForLocation(locationId)
+  const [liveMandiRecords, setLiveMandiRecords] =
+    useState<LiveMandiRecord[]>([])
 
+  const [liveMandiStatus, setLiveMandiStatus] =
+    useState<'loading' | 'loaded' | 'error'>('loading')
+
+  // Official Agmarknet mandi prices for the selected crop, refetched
+  // whenever the crop changes. Falls back to the sample prices in
+  // lib/markets.ts per-market where a district has no live record today.
+  useEffect(() => {
+    let cancelled = false
+    setLiveMandiStatus('loading')
+
+    fetchLivePrices(crop.name, 'Maharashtra')
+      .then((records) => {
+        if (cancelled) return
+        setLiveMandiRecords(records)
+        setLiveMandiStatus(records.length > 0 ? 'loaded' : 'error')
+      })
+      .catch(() => {
+        if (cancelled) return
+        setLiveMandiRecords([])
+        setLiveMandiStatus('error')
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [crop])
+
+  const { markets: liveLocalMarkets, liveMarketIds } = useMemo(() => {
+    const localMarkets = getMarketsForLocation(locationId)
+    return mergeLivePrices(localMarkets, crop.name, liveMandiRecords)
+  }, [locationId, crop, liveMandiRecords])
+
+  const recommendations = useMemo(() => {
     return getMarketRecommendations(
-      localMarkets,
+      liveLocalMarkets,
       crop.name,
       quantityInQuintals,
     )
-  }, [crop, quantityInQuintals, locationId])
+  }, [liveLocalMarkets, crop, quantityInQuintals])
 
   const topRecommendation = recommendations[0] ?? null
 
@@ -2807,6 +2967,31 @@ export default function Page() {
     setContactOfferId(null)
     setLogisticsOfferId(null)
     setTransportConfirmation(null)
+  }
+
+  const logout = async () => {
+    // Clears the Supabase auth cookie server-side. Full state reset after,
+    // same fields demo() resets — plus role/phone, which demo() deliberately
+    // leaves alone since it's for restarting the simulation, not signing out.
+    await supabase.auth.signOut()
+
+    setRole(null)
+    setPhone(null)
+    setFarmerName('')
+    setCrop(crops[0])
+    setQuantity(20)
+    setUnit('quintals')
+    setLocationId(defaultLocation.id)
+    setSelectedMarket(null)
+    setOffers([])
+    setOffline(false)
+    setTransportCost(null)
+    setGradingOfferId(null)
+    setContactOfferId(null)
+    setLogisticsOfferId(null)
+    setTransportConfirmation(null)
+    setView('dashboard')
+    setMobileMenu(false)
   }
 
   const goToGrading = (offerId: string) => {
@@ -2953,6 +3138,9 @@ export default function Page() {
                     [t.dashboard, 'dashboard'],
                     [t.markets, 'comparison'],
                     [t.recommendation, 'recommendation'],
+                    ['Crop Log', 'crop-log'],
+                    ['Weather', 'weather'],
+                    ['MSP', 'msp'],
                     [t.logisticsTag, 'logistics'],
                     [t.trends, 'trends'],
                     [t.offers, 'offers'],
@@ -2990,6 +3178,7 @@ export default function Page() {
           locationLabel={getLocationLabel(locationId)}
           t={t}
           role={role}
+          onLogout={logout}
         />
 
         <main className="mx-auto w-full max-w-7xl flex-1 space-y-7 px-4 py-6 pb-28 md:px-8 md:py-8">
@@ -3010,18 +3199,32 @@ export default function Page() {
                 navigate('logistics')
               }
               topRecommendation={topRecommendation}
+              isTopPriceLive={
+                topRecommendation
+                  ? liveMarketIds.has(topRecommendation.market.id)
+                  : false
+              }
               farmerName={farmerName}
               setFarmerName={setFarmerName}
+              role={role}
               t={t}
             />
           )}
 
-          {view === 'dashboard' && role === 'farmer' && (
-            <div className="space-y-5">
-              <WeatherWidget locationId={locationId} />
-              <RecommendationsFeed />
-              <CropHistoryForm />
-            </div>
+          {view === 'weather' && (
+            <WeatherPage
+              locationId={locationId}
+              setLocationId={setLocationId}
+              back={() => navigate('dashboard')}
+            />
+          )}
+
+          {view === 'msp' && (
+            <MspPage back={() => navigate('dashboard')} />
+          )}
+
+          {view === 'crop-log' && (
+            <CropLogPage back={() => navigate('dashboard')} />
           )}
 
           {view === 'comparison' && (
@@ -3038,6 +3241,7 @@ export default function Page() {
                 setView('dashboard')
               }
               offline={offline}
+              liveMarketIds={liveMarketIds}
             />
           )}
 

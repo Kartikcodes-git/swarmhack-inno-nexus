@@ -230,6 +230,11 @@ export const api = {
         method: 'POST',
         body: JSON.stringify(input),
       }),
+
+    remove: (id: string) =>
+      call<{ deleted: boolean }>(`/api/crop-history/${id}`, {
+        method: 'DELETE',
+      }),
   },
 
   recommendations: {
