@@ -416,7 +416,11 @@ function Login({
 }: {
   role: 'farmer' | 'buyer'
   onBack: () => void
-  onVerified: (phone: string, name: string) => void
+  onVerified: (
+    phone: string,
+    name: string,
+    confirmedRole: 'farmer' | 'buyer',
+  ) => void
 }) {
   const [name, setName] = useState('')
   const [phone, setPhone] = useState('')
@@ -544,14 +548,32 @@ function Login({
 
       const profile = await api.profile.create(profileInput)
       setSubmitting(false)
-      onVerified(phone, profile.fullName)
+      onVerified(phone, profile.fullName, profile.role)
     } catch (err) {
       if (err instanceof ApiError && err.status === 409) {
-        // Already signed up before — just load the existing profile.
+        // Already signed up before — but this phone number's auth user may
+        // have signed up under the OTHER role (e.g. same demo number used
+        // for both Farmer and Buyer). role is immutable per profile, so
+        // silently loading it would open a farmer's account from the buyer
+        // login screen. Check before continuing.
         try {
           const profile = await api.profile.me()
           setSubmitting(false)
-          onVerified(phone, profile.fullName)
+
+          if (profile.role !== role) {
+            const existingLabel =
+              profile.role === 'farmer' ? 'Farmer' : 'Buyer'
+            const triedLabel = role === 'farmer' ? 'Farmer' : 'Buyer'
+
+            setError(
+              `This number is already registered as a ${existingLabel}. ` +
+                `Go back and choose "${existingLabel}", or use a different ` +
+                `mobile number to continue as a ${triedLabel}.`,
+            )
+            return
+          }
+
+          onVerified(phone, profile.fullName, profile.role)
           return
         } catch (fetchErr) {
           setSubmitting(false)
@@ -2973,7 +2995,14 @@ export default function Page() {
     // Clears the Supabase auth cookie server-side. Full state reset after,
     // same fields demo() resets — plus role/phone, which demo() deliberately
     // leaves alone since it's for restarting the simulation, not signing out.
-    await supabase.auth.signOut()
+    // Wrapped: if signOut() itself rejects (network blip etc.), the state
+    // reset below must still run, or the old session's role/phone stay
+    // stuck and the next login silently reuses them.
+    try {
+      await supabase.auth.signOut()
+    } catch (err) {
+      console.error('[logout] signOut failed, resetting local state anyway', err)
+    }
 
     setRole(null)
     setPhone(null)
@@ -3082,15 +3111,16 @@ export default function Page() {
       <Login
         role={role}
         onBack={() => setRole(null)}
-        onVerified={(verifiedPhone, verifiedName) => {
+        onVerified={(verifiedPhone, verifiedName, confirmedRole) => {
           setPhone(verifiedPhone)
+          setRole(confirmedRole)
 
-          if (role === 'farmer' && verifiedName) {
+          if (confirmedRole === 'farmer' && verifiedName) {
             setFarmerName(verifiedName)
           }
 
           setView(
-            role === 'buyer' ? 'marketplace' : 'dashboard',
+            confirmedRole === 'buyer' ? 'marketplace' : 'dashboard',
           )
         }}
       />
@@ -3182,7 +3212,7 @@ export default function Page() {
         />
 
         <main className="mx-auto w-full max-w-7xl flex-1 space-y-7 px-4 py-6 pb-28 md:px-8 md:py-8">
-          <DemoSteps view={view} />
+          {role === 'farmer' && <DemoSteps view={view} />}
 
           {view === 'dashboard' && (
             <Dashboard
